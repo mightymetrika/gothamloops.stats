@@ -1,8 +1,8 @@
 gothamloops.stats PROJECT HANDOFF
 ================================
-Updated: 2026-10-01
-Handoff version: v1
-Purpose: checkpoint after establishing the balanced one-way ANOVA Gotham geometry, concrete threshold profiles, epsilon bands, and the first sequential threshold-hugging process.
+Updated: 2026-10-02
+Handoff version: v2
+Purpose: end-of-day checkpoint after deriving and verifying the deterministic centered threshold-hugging Gotham geometry through H9, including scale-free recurrences, variable-alignment drift, neutral mixed policies, and the exact per-step structurally neutral direction.
 
 PROJECT
 -------
@@ -29,53 +29,44 @@ Development style:
   - Hadley Wickham / Jenny Bryan R package workflow
   - reusable package functions under R/
   - testthat tests under tests/testthat/
-  - scientific exploration/validation should go under data-raw/ when needed
+  - exploratory/reproducible scientific work under data-raw/ and report/
   - roxygen2-generated documentation and NAMESPACE
   - prefer downloadable ZIP patches + short PowerShell commands
-  - use small but efficient checkpoints: validate when scientifically or technically useful, not after every trivial edit
-  - ask for only targeted console output needed for the next bounded decision
+  - use bounded, decision-oriented validation rather than open-ended debugging
+  - ask for only targeted console output needed for the next decision
 
 HANDOFF FILE POLICY
 -------------------
-This file is intended to live at the project root as:
+This file lives at the project root as:
 
   PROJECT_HANDOFF.txt
 
-It should be tracked by Git so it appears in repository/source exports used by future
-LLM sessions, but excluded from the built R package via .Rbuildignore.
+It should be tracked by Git so it appears in source exports for future sessions, but it is excluded from the built R package via .Rbuildignore.
 
 Do NOT add PROJECT_HANDOFF.txt to .gitignore.
 
-At handoff creation, use:
+Current research-support directories are also build-ignored:
 
-  usethis::use_build_ignore("PROJECT_HANDOFF.txt")
-
-to add the build-ignore rule safely.
+  data-raw/
+  report/
 
 
 SCIENTIFIC IDEA
 ---------------
-"Gotham Loops" is being developed as a general framework for bounded novelty:
+"Gotham Loops" is a framework for bounded novelty:
 
   maximize or study heterogeneity / novelty
   subject to preserving a salient structural relationship.
 
-The first implemented statistical version uses a balanced one-way ANOVA ICC as the
-structural criterion.
+The first implemented statistical formulation uses a balanced one-way ANOVA ICC as the structural criterion.
 
-Motivating question:
+The current deterministic question is:
 
-  Given grouped data already observed, what can the next observation in each group
-  look like if the new observations are as heterogeneous as possible while preserving
-  a specified ICC threshold?
+  Given grouped data already observed, how far can the next observation in each group move in a specified direction while the updated data remain exactly on a chosen ICC threshold?
 
-A complementary question is:
+This turns a scalar threshold into a geometry of admissible observations and, under repeated updating, into a constrained dynamical system.
 
-  What profiles lie just across that threshold, within an epsilon band, and therefore
-  break the chosen grouping criterion by only a small amount?
-
-This creates a geometry of a structural decision boundary rather than treating the ICC
-threshold as only a scalar cutoff.
+The current work has moved beyond a single static frontier. The main scientific result is now that repeated threshold-hugging updates admit exact low-dimensional recurrences and explicit control rules.
 
 
 CURRENT MATHEMATICAL MODEL
@@ -85,182 +76,134 @@ Current scope:
   - common current group size n
   - one proposed new observation per group
   - one-way ANOVA / random-intercept ICC
-  - frontier calculations currently focus on centered proposals with mean deviation 0
+  - centered proposal deviations for the current frontier and sequence theory
+  - threshold-hugging sequences use a target ICC tau
 
-For current group g:
+For group g:
 
-  group mean:
+  current group mean:
     ybar_g
 
   grand mean:
     ybar
 
-  current group offset:
+  group offset:
     a_g = ybar_g - ybar
 
-A proposed next observation is represented as:
+Let:
+
+  a = vector of group offsets
+  A = ||a||^2 = group_offset_ss
+  W = SS_within
+
+A proposed observation is:
 
   x_g = ybar_g + d_g
 
-where d_g is the proposal deviation from the current group mean.
+For centered proposals:
 
-The balanced one-way ANOVA ICC used by the package is:
+  mean(d_g) = 0
+
+Define:
+
+  r = ||d||
+
+and alignment:
+
+  c = (a' d) / (||a|| ||d||)
+
+with:
+
+  c = -1  directly opposing current group separation
+  c =  0  orthogonal to current group-offset vector
+  c = +1  directly reinforcing current group separation
+
+The balanced one-way ANOVA ICC is:
 
   ICC = (MS_between - MS_within) /
         (MS_between + (n - 1) * MS_within)
 
-Negative estimated ICC values are retained rather than truncated to 0.
+Negative ICC estimates are retained rather than truncated.
 
 
-ANALYTIC UPDATE IDENTITIES
---------------------------
-If one proposed observation is added to each group, with current common group size n:
+EXACT UPDATE IDENTITIES
+-----------------------
+After adding one centered proposal observation per group:
 
-  SS_within_new
-    = SS_within
-      + n / (n + 1) * sum_g(d_g^2)
+  W' = W + n/(n+1) * r^2
 
-Let:
+  B' = (n+1) A + 2 sqrt(A) r c + r^2/(n+1)
 
-  dbar = mean(d_g)
-  d_cg = d_g - dbar
+The updated group-offset sum of squares is:
 
-Then:
+  A' = A + 2 sqrt(A) r c/(n+1) + r^2/(n+1)^2
 
-  SS_between_new
-    = (n + 1) *
-      sum_g[
-        a_g + d_cg / (n + 1)
-      ]^2
-
-These identities are implemented analytically and tested against physically appending
-the proposed observations and recomputing the ANOVA state from raw data.
-
-
-GOTHAM GEOMETRY
----------------
-For centered proposal deviations:
-
-  dbar = 0
-
-define:
-
-  r = ||d||
-
-as proposal heterogeneity magnitude, and:
-
-  c = cos(theta)
-    = (a' d) / (||a|| ||d||)
-
-as alignment with the existing between-group structure.
-
-Interpretation:
-
-  c = -1
-    proposal directly opposes the existing group ordering / separation
-
-  c = 0
-    proposal is orthogonal to the existing group-offset vector
-
-  c = 1
-    proposal directly reinforces the existing group ordering / separation
-
-A key result already demonstrated:
-
-  the same magnitude of within-group heterogeneity can have very different effects on
-  the ICC depending on alignment.
-
-Therefore "maximally heterogeneous while preserving grouping" cannot be defined by
-magnitude alone. Direction relative to the existing grouping structure matters.
+This immediately implies that c = 0 is NOT exactly structurally neutral at finite n whenever r > 0, because the quadratic term remains positive.
 
 
 IMPLEMENTED PACKAGE FUNCTIONS
 -----------------------------
-Current exported/public-facing functions developed in this milestone:
+Current package functions:
 
-1. anova_icc()
+1. anova_icc(data, outcome, group)
    - balanced one-way ANOVA ICC
-   - retains negative estimates
-   - rejects unbalanced/invalid input for this first formulation
+   - validates inputs and rejects unbalanced data in this first formulation
 
-2. gotham_state()
-   - summarizes the current balanced grouped dataset
-   - returns:
-       n_groups
-       group_size
-       grand_mean
-       group_means
-       group_offsets
-       group_offset_ss
-       ss_between
-       ss_within
-       ms_between
-       ms_within
-       icc
+2. gotham_state(data, outcome, group)
+   - returns n_groups, group_size, grand_mean, group_means, group_offsets,
+     group_offset_ss, ss_between, ss_within, ms_between, ms_within, icc
 
-   where:
-       group_offset_ss = sum_g(a_g^2) = ||a||^2
+3. gotham_update(state, deviations)
+   - exact analytic update after one proposed observation per group
+   - records proposal geometry
 
-3. gotham_update()
-   - analytically updates the ANOVA state after one proposed observation per group
-   - proposal deviations are d_g = x_g - ybar_g
-   - records proposal geometry including:
-       deviations
-       mean_deviation
-       centered_deviations
-       deviation_ss
-       centered_deviation_ss
-       alignment
+4. gotham_frontier(state, threshold, alignment, ...)
+   - analytic centered frontier in radius/alignment coordinates
+   - general implementation still permits 0, 1, or 2 finite nonnegative crossings
 
-4. gotham_frontier()
-   - solves the ICC threshold boundary analytically for centered proposals
-   - parameterization:
-       radius r
-       alignment c
-   - solves for the first/possible positive threshold crossings
-   - allows no finite root, one root, or two roots
-   - do NOT assume globally that every direction has exactly one crossing
+5. gotham_profile(state, radius, alignment, mean_deviation = 0, ...)
+   - deterministic representative microstate for a requested macrostate (r, c)
 
-5. gotham_profile()
-   - constructs one deterministic representative observation/deviation profile for a
-     requested radius and alignment
-   - many microstates can share the same macrostate (r, c)
+6. gotham_profile_set(...)
+   - representative profiles at threshold + epsilon, threshold, threshold - epsilon
 
-6. gotham_profile_set()
-   - generates concrete representative profiles at:
-       threshold + epsilon
-       threshold
-       threshold - epsilon
-   - makes the "just preserves / boundary / just breaks" idea tangible
+7. gotham_band(...)
+   - maps an ICC epsilon band into observation-space radial distances
 
-7. gotham_band()
-   - maps an ICC-scale epsilon band into observation-space radial distances
-   - quantifies local boundary width / fragility along a chosen alignment direction
+8. gotham_sequence(state, steps, threshold, alignment, ...)
+   - sequentially follows the first frontier crossing and updates the state
+   - accepts fixed or step-specific alignment values
 
-8. gotham_sequence()
-   - repeatedly takes the CURRENT state
-   - finds the first ICC frontier crossing along a fixed requested alignment
-   - generates the corresponding threshold profile
-   - adds one new observation per group analytically
-   - repeats
-   - every completed step is designed to return to the same ICC threshold
+Important interpretation:
+  gotham_sequence() follows the FIRST frontier crossing. In the threshold-hugging regime studied below, H2 proves that there is exactly one positive crossing once its sufficient condition holds. The more general gotham_frontier() should remain capable of representing other topologies.
 
-IMPORTANT:
-  gotham_sequence() currently follows the FIRST frontier crossing along each ray.
-  Do not casually describe this as the globally largest possible admissible radius in
-  cases where a direction could have multiple crossings / re-entry.
+
+RESEARCH SUPPORT FILES
+----------------------
+Current reproducible analysis layer:
+
+  data-raw/sequence_grid_exploration.R
+
+This script supports longer fixed-alignment sequence diagnostics and plotting.
+
+Current research notebook:
+
+  report/gotham_sequence_hypotheses.Rmd
+  report/gotham_sequence_hypotheses.docx
+
+The report is intentionally exploratory rather than package-facing. It records hypotheses, derivations, numerical verification, and plots.
 
 
 VALIDATION STATUS
 -----------------
-Latest test result:
+Last known automated package test baseline:
 
   FAIL 0
   WARN 0
   SKIP 0
   PASS 285
 
-Contexts:
+Contexts at the original package checkpoint:
 
   anova-icc        21
   gotham-band      23
@@ -270,377 +213,586 @@ Contexts:
   gotham-state     22
   gotham-update    31
 
-The test suite includes independent checks of analytic updates against raw-data
-recomputation.
+The test suite includes independent checks of analytic updates against raw-data recomputation.
 
-Latest user-reported R CMD check after correcting the initial license metadata:
+Latest user-reported R CMD check on 2026-10-02:
 
   0 errors
   0 warnings
   0 notes
 
-Earlier non-substantive setup issues already resolved:
-  - roxygen markdown link warning involving [0, 1]
-  - named-vector versus unnamed-vector test comparisons
-  - MIT license metadata added with usethis::use_mit_license()
+Duration reported:
 
-A recurring RStudio message has appeared after restarting:
+  52.4s
+
+Report-only work after that check did not alter package R/ code.
+
+A recurring RStudio warning after some restarts is:
 
   In .Call("rs_getBrowserEnv", PACKAGE = "(embedding)") :
     converting NULL pointer to R NULL
 
-It has not affected package tests/checks in this work.
+It has not affected package tests or checks.
 
 
-CANONICAL SIMPLE EXAMPLE
-------------------------
-Example raw data:
+CANONICAL EXAMPLE
+-----------------
+Raw data:
 
   group A: 1, 2, 3
   group B: 4, 5, 6
   group C: 7, 8, 9
 
-Thus:
+Therefore:
 
   G = 3
   n = 3
   grand mean = 5
   group means = (2, 5, 8)
   group offsets = (-3, 0, 3)
-  group_offset_ss = 18
+  A = group_offset_ss = 18
   SS_between = 54
   SS_within = 6
   MS_between = 27
   MS_within = 1
-  ICC = 26 / 29 = 0.8965517
+  ICC = 26/29 = 0.8965517
 
-
-STATIC FRONTIER EXAMPLE
------------------------
-For the canonical example with threshold:
+Canonical threshold used throughout the notebook:
 
   tau = 0.80
 
-the first frontier radii obtained were:
+Illustrative fixed-alignment frontier radii at the initial state:
 
-  alignment    radius
-  ---------    --------
-    -1.0       3.026088
-    -0.5       3.625311
-     0.0       4.369986
-     0.5       5.267624
-     1.0       6.310713
+  c = -1.0   r = 3.026088
+  c = -0.5   r = 3.625311
+  c =  0.0   r = 4.369986
+  c =  0.5   r = 5.267624
+  c =  1.0   r = 6.310713
 
-Other reported frontier quantities:
-
-  threshold         = 0.80
-  ICC at zero       = 0.9298246
-  ICC at infinity   = 0.1111111
-  boundary SS ratio = 3.777778
-
-Interpretation:
-  - opposing the existing grouping structure reaches the ICC boundary much sooner
-  - reinforcing the structure permits substantially larger observation-space
-    heterogeneity before reaching the same ICC threshold
+The same ICC threshold permits much larger heterogeneity when proposals reinforce rather than oppose the existing group structure.
 
 
-CONCRETE PROFILE EXAMPLE
-------------------------
-At tau = 0.80:
+50-STEP FIXED-ALIGNMENT REVIEW
+------------------------------
+The exploratory sequence grid used:
 
-Alignment -1:
-  current means:       (2, 5, 8)
-  deviations:          ( 2.139767, 0, -2.139767)
-  proposed observations:
-                      (4.139767, 5, 5.860233)
-  achieved ICC:        0.80
-
-Alignment 0:
-  deviations:
-                      (-1.784039, 3.568078, -1.784039)
-  proposed observations:
-                      (0.215961, 8.568078, 6.215961)
-  achieved ICC:        0.80
-
-Alignment +1:
-  deviations:
-                      (-4.462348, 0, 4.462348)
-  proposed observations:
-                      (-2.462348, 5, 12.462348)
-  achieved ICC:        0.80
-
-This is the clearest current illustration that large within-group deviations can be
-compatible with the same ICC if their direction reinforces the between-group pattern.
-
-
-EPSILON BAND EXAMPLE
---------------------
-For:
-
-  tau = 0.80
-  epsilon = 0.02
-
-the radii were:
-
-  alignment   r(.82)     r(.80)     r(.78)     total band width
-  ---------   --------    --------    --------    ----------------
-     -1       2.778148    3.026088    3.254062       0.475914
-      0       3.962204    4.369986    4.764208       0.802004
-      1       5.650908    6.310713    6.975182       1.324274
-
-Distances from the +epsilon frontier to threshold and threshold to -epsilon:
-
-  alignment   above -> threshold   threshold -> below
-  ---------   ------------------   ------------------
-     -1             0.247940             0.227974
-      0             0.407782             0.394222
-      1             0.659805             0.664469
-
-Important interpretation:
-
-  the same ICC-scale epsilon does NOT correspond to a constant distance in observation
-  space.
-
-The decision boundary is locally more fragile/narrow in some directions and broader in
-others.
-
-
-SEQUENTIAL GOTHAM RESULT
-------------------------
-The first sequential experiment used:
-
+  steps = 50
   threshold = 0.80
-  steps = 5
+  alignments = -1, -0.75, -0.50, -0.25, 0, 0.25, 0.50, 0.75, 1
 
-with fixed alignments:
+All 50 steps completed for every alignment.
 
-  -1
-   0
-  +1
+No two-root cases appeared.
 
-Every completed step returned to:
+At step 50, approximate endpoint ratios relative to the start were:
 
-  ICC_after = 0.80
+  alignment   radius ratio   A ratio        W ratio
+  ---------   ------------   -----------    -----------
+    -1.00       0.158705       0.103528       6.027962
+    -0.75       0.202065       0.153810       8.955656
+    -0.50       0.274125       0.256746      14.949105
+    -0.25       0.402538       0.498210      29.008447
+     0.00       0.650466       1.166466      67.917868
+     0.25       1.173956       3.412802     198.711607
+     0.50       2.391522      12.812034     745.985163
+     0.75       5.522785      62.509822    3639.656395
+     1.00      14.422682     395.419501   23023.439696
 
-but the data geometry evolved very differently.
+The common minimum ICC_at_zero over the 50-step review was approximately:
 
+  0.8031175
 
-A. OPPOSING SEQUENCE: alignment = -1
-
-  step   radius      group_offset_ss_before   group_offset_ss_after
-    1    3.026088          18.000000              12.153023
-    2    1.460399          12.153023              10.201884
-    3    1.293436          10.201884               8.871260
-    4    1.177492           8.871260               7.897522
-    5    1.091238           7.897522               7.149464
-
-Interpretation:
-  - repeated threshold-hugging novelty that opposes current group structure collapses
-    the between-group geometry
-  - after the first step, progressively smaller proposal radii are sufficient to return
-    the ICC to .80
+This numerical work motivated H1-H6 but is no longer the main source of evidence because the important structure has now been derived analytically.
 
 
-B. ORTHOGONAL SEQUENCE: alignment = 0
+HYPOTHESIS / RESULT REGISTRY
+----------------------------
+The research notebook now contains H1-H9.
 
-  step   radius      group_offset_ss_before   group_offset_ss_after
-    1    4.369986          18.000000              19.193548
-    2    3.090849          19.193548              19.575682
-    3    3.046652          19.575682              19.833518
-    4    3.014524          19.833518              20.018974
-    5    2.990176          20.018974              20.158680
+H1. ZERO-RADIUS HEADROOM IS PATH-INVARIANT
+------------------------------------------
+Status:
+  exact identity derived and numerically verified
 
-Interpretation:
-  - orthogonal proposals do not preserve group_offset_ss exactly
-  - the cross-product with the existing structure is zero, but the squared magnitude of
-    the mean update adds separation
-  - group_offset_ss therefore grows modestly
-  - the threshold radius stabilizes near 3 in this short run
+If the current balanced state has common group size n and current ICC rho, adding one observation exactly at each current group mean gives:
+
+  rho_0(n, rho)
+    = [n^2 rho + n rho - 2 rho + 2] /
+      [n^2 + n rho - rho + 1]
+
+Headroom:
+
+  rho_0 - rho
+    = (1-rho)(n rho - rho + 2) /
+      [n^2 + n rho - rho + 1]
+
+For 0 <= rho < 1 this is positive.
+
+For fixed 0 < rho < 1:
+
+  rho_0 - rho = rho(1-rho)/n + O(n^-2)
+
+Numerical verification across the 450 sequence-grid diagnostics:
+
+  max absolute discrepancy = 3.330669e-16
+
+Key consequence:
+  conditional on current group size and current ICC, zero-radius headroom is independent of alignment history, absolute scale, and G.
 
 
-C. REINFORCING SEQUENCE: alignment = +1
+H2. UNIQUE POSITIVE FRONTIER CROSSING IN THE THRESHOLD REGIME
+-------------------------------------------------------------
+Status:
+  exact sufficient condition derived and numerically verified
 
-  step   radius      group_offset_ss_before   group_offset_ss_after
-    1     6.310713          18.000000              33.876113
-    2     6.915407          33.876113              51.888978
-    3     8.434539          51.888978              74.117582
-    4     9.977766          74.117582             100.692233
-    5    11.541850         100.692233             131.728031
+For centered proposals the large-radius ICC limit is:
 
-Interpretation:
-  - repeated threshold-hugging novelty aligned with current group structure dramatically
-    expands between-group separation
-  - the admissible threshold radius grows rapidly
-  - very large within-group deviations remain compatible with ICC = .80 because they
-    simultaneously reinforce between-group separation
+  rho_infinity(n, G) = 1 / [G + n(G-1)]
+
+If:
+
+  rho_0 > tau > rho_infinity
+
+then the quadratic frontier equation has exactly one positive root for every c in [-1, 1].
+
+For a state already on the threshold, H1 guarantees rho_0 > tau, so the condition reduces to:
+
+  tau > 1 / [G + n(G-1)]
+
+Because the right side decreases with n, once this condition holds in a threshold-hugging sequence it continues to hold at every later step.
+
+Therefore the current canonical sequence cannot suddenly develop two-root/re-entry behavior later.
+
+A second corollary is that, for a fixed state in this regime, the positive frontier radius is strictly increasing in alignment c.
+
+Numerical verification over all 450 diagnostics:
+
+  infinity formula max error = 0
+  all sufficient inequalities satisfied = TRUE
+  all cases exactly one finite positive root = TRUE
 
 
-A SECOND IMPORTANT SEQUENTIAL RESULT
+H3. ORTHOGONALITY IS NOT STRUCTURAL NEUTRALITY
+----------------------------------------------
+Status:
+  exact consequence of the update identity
+
+At c = 0:
+
+  A' = A + r^2/(n+1)^2 > A
+
+for r > 0.
+
+Thus orthogonal proposals eliminate the linear cross-product term but not the positive quadratic contribution.
+
+
+H4. STRUCTURAL CONTRACTION / EXPANSION BOUNDARY
+-----------------------------------------------
+Original 50-step numerical observation:
+  the finite-horizon endpoint crossing for A lay between c = -0.25 and c = 0.
+
+Resolved by H9:
+  at each finite group size there is an exact one-step structurally neutral alignment c_n* < 0.
+
+Moreover:
+
+  c_n* -> 0 from below at rate 1/n.
+
+Thus the asymptotic critical alignment is c = 0, while exact finite-n neutrality requires a small opposing component.
+
+
+H5. RADIUS NEUTRALITY VERSUS STRUCTURAL NEUTRALITY
+---------------------------------------------------
+Original 50-step observation:
+  the final/initial radius crossing appeared between c = 0 and c = 0.25, whereas the A crossing appeared between -0.25 and 0.
+
+Current interpretation:
+  these are finite-horizon comparisons against the starting scale, not evidence for two distinct asymptotic critical alignments.
+
+H6 shows that the asymptotic qualitative boundary for both radius and A is c = 0.
+
+Keep the finite-horizon distinction as a useful transient phenomenon, but do not describe H5 as a second asymptotic neutrality boundary.
+
+
+H6. SCALE-FREE NORMALIZED RECURRENCE
 ------------------------------------
-At step 1:
+Status:
+  exact recurrence derived and numerically verified
 
-  ICC_before  = 0.8965517
-  ICC_at_zero = 0.9298246
+Once the current state is exactly on ICC threshold tau:
 
-At subsequent steps, ICC_before is exactly 0.80 but adding an observation exactly at
-each current group mean would temporarily raise the ICC:
+  W_n / A_n
+    = n G (n-1)(1-tau) /
+      [(G-1){1 + (n-1)tau}]
 
-  step 2: ICC_at_zero = 0.8453608
-  step 3: ICC_at_zero = 0.8356164
-  step 4: ICC_at_zero = 0.8292683
-  step 5: ICC_at_zero = 0.8248175
+Define normalized frontier radius:
 
-Thus each step creates some "room" for additional heterogeneity before returning to the
-same threshold.
+  z_n = r_n / sqrt(A_n)
 
-This is a consequence of adding observations at the group means without adding
-within-group sum of squares while group size changes.
+Then:
+
+  -a_n z_n^2 + 2 c z_n + gamma_n = 0
+
+where:
+
+  a_n
+    = [tau{G + n(G-1)} - 1] /
+      [G(n+1)(1-tau)]
+
+  gamma_n
+    = [tau(n-1) + 2] /
+      [tau(n-1) + 1]
+
+Under H2, the unique positive solution is:
+
+  z_n(c)
+    = [c + sqrt(c^2 + a_n gamma_n)] / a_n
+
+Thus r_n/sqrt(A_n) depends only on:
+
+  n, G, tau, c
+
+and NOT on:
+
+  absolute scale of A_n
+  detailed path/history that produced the threshold state
+
+The exact multiplicative recurrence is:
+
+  A_{n+1}
+    = A_n [1 + 2 c z_n(c)/(n+1) + z_n(c)^2/(n+1)^2]
+
+Numerical verification:
+
+  normalized-radius max error = 7.771561e-15
+  A recurrence max relative error = 5.461076e-16
+  different-history normalized-radius spread = 4.440892e-16
+
+Asymptotically:
+
+  a_n -> a_infinity
+      = tau(G-1) / [G(1-tau)]
+
+  z_n(c) -> z_infinity(c)
+
+with:
+
+  z_infinity(c)
+    = [c + sqrt(c^2 + a_infinity)] / a_infinity
+
+For fixed c != 0:
+
+  A_n asymptotically scales as n^[2 c z_infinity(c)]
+  r_n asymptotically scales as n^[c z_infinity(c)]
+
+Therefore:
+
+  c < 0  => A_n -> 0 and r_n -> 0
+  c = 0  => A_n and r_n approach finite positive limits
+  c > 0  => A_n -> infinity and r_n -> infinity
+
+
+H7. MEAN-ZERO VARIABLE ALIGNMENT IS NOT GOTHAM-NEUTRAL
+------------------------------------------------------
+Status:
+  exact cumulative-drift criterion derived and numerically verified
+
+For variable alignment c_n, define:
+
+  h(c) = 2 c z_infinity(c)
+
+Then:
+
+  log A_N
+    = log A_start + sum_n h(c_n)/n + O(1)
+
+Thus long-run behavior depends on a harmonic-time accumulation of a NONLINEAR drift, not the ordinary mean of the alignments.
+
+For symmetric +/- c:
+
+  h(c) + h(-c)
+    = 4 c^2 / a_infinity > 0
+
+So equal-frequency alternating +c and -c schedules have mean alignment zero but positive asymptotic Gotham drift.
+
+Canonical predicted A exponents for symmetric alternation:
+
+  +/- 0.25  -> 0.046875
+  +/- 0.50  -> 0.187500
+  +/- 1.00  -> 0.750000
+
+In 5,000-step recurrence runs, estimated late-time slopes closely matched these predictions.
+
+For +/- 1, the final A ratio was approximately:
+
+  143.135659
+
+Direct variable-alignment recurrence versus gotham_sequence():
+
+  max relative discrepancy = 6.808267e-16
+
+Key conceptual result:
+
+  mean alignment = 0
+  does NOT imply
+  structural neutrality
+
+
+H8. GOTHAM-NEUTRAL MIXED POLICIES REQUIRE ASYMMETRIC WEIGHTING
+--------------------------------------------------------------
+Status:
+  exact asymptotic weighting rule and finite-n log-neutral policy derived and verified
+
+For two available alignments:
+
+  c_- < 0 < c_+
+
+asymptotic neutrality requires nonlinear drift balance:
+
+  p_+ h(c_+) + (1-p_+) h(c_-) = 0
+
+so:
+
+  p_+*
+    = -h(c_-) / [h(c_+) - h(c_-)]
+
+For symmetric +/- c:
+
+  p_+*
+    = 1/2 - c/[2 sqrt(c^2 + a_infinity)]
+
+  p_-*
+    = 1/2 + c/[2 sqrt(c^2 + a_infinity)]
+
+Thus a neutral policy requires MORE opposing than reinforcing moves.
+
+Canonical G = 3, tau = 0.80 neutral shares:
+
+  magnitude   positive share   negative share
+  ---------   --------------   --------------
+    0.25        0.424335         0.575665
+    0.50        0.353615         0.646385
+    1.00        0.238884         0.761116
+
+Exact finite-n log-neutral stochastic share:
+
+  p_n^+
+    = -log m_n(c_-) /
+      [log m_n(c_+) - log m_n(c_-)]
+
+For symmetric +/- 0.5 this converges toward 0.353615 as n increases.
+
+A deterministic greedy controller using exact multipliers was also tested for 5,000 steps. Final A ratios stayed essentially at 1:
+
+  magnitude 0.25 -> 0.999966
+  magnitude 0.50 -> 1.000080
+  magnitude 1.00 -> 0.999868
+
+For the +/- 0.5 controller, recurrence versus gotham_sequence():
+
+  max relative discrepancy = 3.346695e-15
+
+Important distinction:
+  directional balance, asymptotic structural balance, finite-n log balance, and deterministic finite-horizon balance are not equivalent notions.
+
+
+H9. EXACT ONE-STEP STRUCTURALLY NEUTRAL ALIGNMENT
+-------------------------------------------------
+Status:
+  exact formula derived and directly verified against gotham_sequence()
+
+Exact one-step structural neutrality requires:
+
+  A_{n+1} = A_n
+
+Using H6, this implies:
+
+  z_n* = -2 c_n* (n+1)
+
+so the exact neutral direction is slightly opposing:
+
+  c_n* < 0
+
+Closed form:
+
+  c_n*
+    = -1/2 * sqrt(
+        G(1-tau){tau(n-1)+2} /
+        [(n+1)(G-1)(1+n tau){tau(n-1)+1}]
+      )
+
+Associated normalized radius:
+
+  z_n*
+    = sqrt(
+        G(1-tau)(n+1){tau(n-1)+2} /
+        [(G-1)(1+n tau){tau(n-1)+1}]
+      )
+
+Asymptotically:
+
+  c_n*
+    = -z_infinity(0)/(2n) + O(n^-2)
+
+and:
+
+  z_n* -> z_infinity(0)
+
+For G = 3, tau = 0.80:
+
+  n = 4      c_n* = -0.06798418
+  n = 10     c_n* = -0.02915413
+  n = 50     c_n* = -0.00606302
+  n = 100    c_n* = -0.00304662
+  n = 1000   c_n* = -0.00030603
+
+A direct 200-step gotham_sequence() run used the step-specific c_n* values.
+
+Verification:
+
+  largest relative deviation of A from its initial value:
+    6.661338e-16
+
+  largest normalized-radius formula discrepancy:
+    2.697842e-14
+
+  largest post-update ICC discrepancy from tau:
+    1.110223e-16
+
+Thus H9 is fully verified at numerical tolerance.
+
+Interpretation:
+  orthogonality is the asymptotic neutral direction, but exact finite-n structural neutrality requires a small opposing correction.
 
 
 CURRENT SCIENTIFIC TAKEAWAY
 ---------------------------
-The strongest result so far is:
+The original empirical finding was that the same ICC threshold permits radically different observation-space heterogeneity depending on alignment.
 
-  A fixed ICC threshold does not define a single amount of allowable heterogeneity.
+The stronger result now is that the deterministic centered threshold-hugging model has an unexpectedly clean analytic structure:
 
-Instead, the admissible amount depends strongly on the DIRECTION of the new observations
-relative to the existing between-group structure.
+  1. zero-radius headroom is path-invariant conditional on n and current ICC;
+  2. the threshold regime has exactly one positive centered frontier crossing under a simple persistent condition;
+  3. threshold-state dynamics collapse to a scale-free normalized recurrence;
+  4. fixed alignment yields explicit contraction / finite-limit / expansion regimes;
+  5. mean-zero directional balance is not structural balance;
+  6. neutral mixed policies require asymmetric directional weighting;
+  7. exact finite-n single-step neutrality is available in closed form and is slightly opposing.
 
-Moreover, under a sequential threshold-hugging process:
-
-  the same ICC_after = 0.80 can coexist with radically different evolving data
-  geometries.
-
-After five steps in the canonical example:
-
-  opposing:
-    group_offset_ss = 7.149464
-
-  orthogonal:
-    group_offset_ss = 20.158680
-
-  reinforcing:
-    group_offset_ss = 131.728031
-
-So datasets can satisfy the exact same low-order grouping criterion while having very
-different structural histories and geometries.
-
-This is likely more scientifically interesting than simply characterizing one static
-ICC threshold.
+The deterministic centered ICC version is therefore now much closer to a small constrained dynamical/control system than to a brute-force simulation exercise.
 
 
 IMPORTANT TERMINOLOGY / INTERPRETATION CAUTIONS
 -----------------------------------------------
-1. ICC is being used here as the first salient grouping statistic, not claimed to be
-   universally the correct decision criterion.
+1. ICC is the first structural criterion, not claimed to be universally correct.
 
-2. The first package formulation is deliberately balanced and one-way.
+2. The current model is balanced and one-way.
 
-3. Current frontier work is primarily for centered proposals (mean deviation = 0).
+3. Current frontier/sequence theory is for centered proposals.
 
-4. "Alignment" is with the current vector of group offsets from the grand mean.
+4. "Alignment" is relative to the CURRENT group-offset vector, not a fixed original direction in observation coordinates.
 
-5. gotham_profile() returns a representative microstate. Many actual observation
-   vectors can share the same (radius, alignment) macrostate.
+5. gotham_profile() returns one representative microstate; many actual observation vectors share the same radius/alignment macrostate.
 
-6. gotham_sequence() follows the FIRST threshold crossing along the chosen alignment
-   direction. Because gotham_frontier() allows two-root cases, avoid calling this
-   globally "the maximum possible heterogeneity" without checking the frontier topology.
+6. The general gotham_frontier() should continue to permit 0/1/2 crossings. H2 is a result for the more specific threshold-hugging centered regime.
 
-7. The .80 threshold and .02 epsilon used in examples are illustrative, not asserted as
-   universal education-research standards.
+7. The illustrative tau = 0.80 and epsilon = 0.02 are not universal substantive standards.
 
+8. H5 should now be described as a finite-horizon/transient comparison, not as evidence for two different asymptotic critical alignments.
 
-RECOMMENDED NEXT SCIENTIFIC STEP
---------------------------------
-Do NOT immediately add many extra model features.
+9. H7/H8 neutrality is governed by nonlinear/harmonic-time drift, not simply raw average alignment.
 
-First study the sequential process we have just uncovered.
-
-Recommended next bounded work:
-
-1. Add a compact trajectory visualization / summary helper for gotham_sequence().
-
-2. Run longer deterministic trajectories over a grid of alignments, e.g.:
-     -1.0, -0.75, -0.50, -0.25, 0, 0.25, 0.50, 0.75, 1.0
-
-3. Examine:
-     - radius by step
-     - group_offset_ss by step
-     - within-group SS by step
-     - ICC_at_zero by step
-     - whether first-root solutions continue to exist
-     - whether any two-root/re-entry behavior appears
-     - limiting/stable/explosive behavior
-
-4. Only after understanding those trajectories decide whether to:
-     - derive asymptotic behavior analytically
-     - introduce stochastic direction selection
-     - add nonzero common-shift dimension
-     - compare alternative structural criteria
-     - move to the smooth closed-curve/Fourier Gotham model
-
-A particularly important question is whether the opposing, orthogonal, and reinforcing
-regimes have recognizable long-run limits or phase-like behavior.
+10. H8 mixed-policy neutrality and H9 single-step deterministic neutrality are different control strategies.
 
 
-POSSIBLE LATER STATISTICAL STUDY
---------------------------------
-A later simulation program could compare:
+NEXT SCIENTIFIC DECISION
+------------------------
+Do NOT extend the fixed-alignment brute-force run from 50 to 500 merely for its own sake. H1, H2, H6, H7, H8, and H9 have analytically settled the main deterministic questions that motivated the longer-run exploration.
+
+At the next session, choose one of two scientifically meaningful extensions:
+
+A. STOCHASTIC ALIGNMENT PROCESSES
+
+Study c_n as a random process or draw from a distribution.
+Questions:
+  - Under what distributional conditions is the expected nonlinear drift negative, zero, or positive?
+  - How do ordinary mean alignment and E[h(c)] differ?
+  - What is the role of dependence/autocorrelation in c_n?
+  - Can a martingale or stochastic-approximation formulation characterize neutral policies?
+  - What finite-sample variability surrounds the deterministic asymptotic drift?
+
+This is the closest continuation of H7-H9.
+
+B. BROADER STRUCTURAL CRITERIA
+
+Ask whether the Gotham geometry survives when ICC is replaced or supplemented by another grouping/structure criterion.
+Possible later candidates:
+  - alternative reliability/variance-component measures
+  - cluster separation summaries
+  - multilevel-model criteria
+  - multiple structural constraints
+
+Do not broaden until the desired scientific question is explicit.
+
+A smaller cleanup task before either extension:
+  update the H4/H5 prose in the hypothesis notebook so the older exploratory wording is fully reconciled with H6/H9.
+
+
+LATER SIMULATION PROGRAM
+------------------------
+A later statistical study could compare:
 
   ordinary random-intercept-generated clustered data
 
 versus:
 
-  Gotham-generated data that are deliberately constructed to remain at the same ICC
-  threshold.
+  Gotham-generated data deliberately constructed to remain on the same structural threshold.
 
-Then study whether identical/similar ICC values conceal differences in:
+Then examine whether similar ICC values conceal differences in:
 
   - exchangeability
-  - within-cluster distributional shape
+  - within-cluster shape
   - tail behavior
   - variance-component estimation
-  - model-based standard errors
-  - cluster-robust standard errors
-  - CI coverage
+  - model-based versus cluster-robust standard errors
+  - confidence interval coverage
   - Type I error
   - mixed-model misspecification sensitivity
 
-This is NOT the immediate next implementation step; first understand the geometry of the
-current sequential process.
+This remains later work, after choosing the next structural extension.
 
 
-FOURIER / SMOOTH-CURVE BRANCH
------------------------------
-The original non-statistical Gotham idea remains active:
+SPATIAL / CURVE BRANCHES FOR LATER
+----------------------------------
+Original smooth-curve Gotham idea:
+  simulate smooth closed curves, probably via Fourier coefficients or periodic Gaussian-process-style representations, rewarding novelty subject to remaining within a familiarity/safety neighborhood of prior loops.
 
-  simulate smooth closed curves, probably through Fourier coefficients or periodic
-  Gaussian-process-style representations, with novelty rewarded subject to remaining
-  within a familiarity/safety neighborhood of accumulated prior loops.
+A second conceptual branch noted on 2026-10-02 is stochastic interface growth / KPZ / universality, motivated by Martin Hairer's discussions of ballistic-deposition/Tetris-style interfaces and forest-fire fronts.
 
-Do not divert to this until the first ANOVA/statistical Gotham process is characterized
-well enough to clarify which abstract properties should carry across both versions.
+Important caution:
+  the current statistical Gotham frontier is NOT a KPZ frontier. The connection is conceptual: both ask how local/microscopic moves generate macroscopic boundary geometry and which details matter after scaling.
+
+Do not divert into these spatial branches until the statistical framework's next extension is chosen deliberately.
 
 
-GIT / RELEASE CHECKPOINT
-------------------------
-Latest known pushed commit before the current package-development milestone:
+GIT / CHECKPOINT STATUS
+-----------------------
+Last previously confirmed pushed checkpoint before the current report/analysis work:
 
-  831a051  Update gitignore
+  2c79bb7  Build initial ANOVA Gotham framework
 
-The ANOVA ICC / Gotham state / frontier / profiles / band / sequence work described in
-this handoff was developed after that checkpoint and is intended to be committed and
-pushed immediately after installing this handoff.
+The end-of-day commit should include, at minimum, the current modified tracked files plus:
 
-Because the final commit hash does not exist at the time this handoff was generated, a
-future session should begin with:
+  PROJECT_HANDOFF.txt
+  data-raw/sequence_grid_exploration.R
+  report/gotham_sequence_hypotheses.Rmd
+  report/gotham_sequence_hypotheses.docx
 
-  git status
-  git log --oneline --decorate -8
+Actual git status is authoritative; do not assume this list is exhaustive.
 
-and treat the newest clean pushed commit containing PROJECT_HANDOFF.txt as the
-authoritative checkpoint.
+Recommended commit message:
+
+  Develop sequential Gotham geometry and neutral control rules
 
 
 RECOMMENDED NEXT SESSION START
@@ -658,49 +810,48 @@ R:
   load_all()
   test()
 
-Expected automated baseline at this handoff:
+Expected package baseline:
 
   285 tests passing
 
-Expected R CMD check baseline:
+Latest user-reported R CMD check baseline:
 
-  0 errors
-  0 warnings
-  0 notes
+  0 errors | 0 warnings | 0 notes
 
-Then inspect PROJECT_HANDOFF.txt and the latest source export before changing the
-scientific model.
+Then read:
+
+  PROJECT_HANDOFF.txt
+  report/gotham_sequence_hypotheses.Rmd
+
+before changing the model.
 
 
 DO NOT LOSE THESE DESIGN PRINCIPLES
 ----------------------------------
 - Start from exact/simple mathematics where possible.
-- Verify analytic formulas against brute-force/raw-data recomputation.
-- Keep mathematical primitives small and separately tested.
-- Use simulation after the deterministic geometry is understood.
+- Verify analytic formulas against package computations and raw-data recomputation.
+- Use simulation after deterministic structure is understood, not instead of derivation.
+- Keep mathematical primitives small and separately testable.
 - Do not introduce complexity only because it is possible.
-- Preserve the distinction between:
-    macrostate: radius/alignment/threshold geometry
-    microstate: actual proposed observation vector
-- Preserve epsilon on both sides of the structural threshold.
+- Preserve macrostate versus microstate distinctions.
+- Preserve both sides of epsilon/frontier interpretations where relevant.
+- Distinguish finite-horizon neutrality from asymptotic neutrality.
+- Distinguish raw directional balance from nonlinear structural balance.
 - Prefer bounded, decision-oriented development steps.
-- Keep the package useful as a research object, not merely as a game implementation.
+- Keep the package useful as a scientific research object, not merely a game implementation.
 
 
 END OF HANDOFF
 --------------
 Current milestone:
-  balanced one-way ANOVA Gotham framework implemented through the first sequential
-  threshold-hugging process
+  deterministic centered threshold-hugging Gotham geometry characterized through H9
 
-Automated baseline:
+Automated package baseline:
   285 tests passing
   R CMD check: 0 errors | 0 warnings | 0 notes
 
-Strongest empirical finding so far:
-  holding ICC_after fixed at .80 does not hold the underlying grouping geometry fixed;
-  repeated opposing, orthogonal, and reinforcing frontier moves produce sharply
-  different structural trajectories.
+Strongest current result:
+  the threshold-hugging process reduces to exact normalized recurrences and admits explicit neutral control laws; equal directional balance is generally not structurally neutral.
 
 Immediate next task:
-  characterize and visualize longer sequential trajectories before expanding the model.
+  choose between stochastic alignment processes and a broader structural criterion, after a small H4/H5 wording cleanup in the research notebook.

@@ -1,0 +1,3224 @@
+---
+title: "Gotham Loops Sequential Geometry: Hypothesis Notebook"
+output:
+  word_document:
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 7,
+  fig.height = 4.5
+)
+
+project_root <- if (
+  file.exists("DESCRIPTION")
+) {
+  "."
+} else if (
+  file.exists("../DESCRIPTION")
+) {
+  ".."
+} else {
+  stop("Could not locate the gothamloops.stats package root.")
+}
+
+devtools::load_all(
+  project_root,
+  quiet = TRUE
+)
+
+exploration_script <- file.path(
+  project_root,
+  "data-raw",
+  "sequence_grid_exploration.R"
+)
+
+if (!file.exists(exploration_script)) {
+  stop(
+    "Could not locate data-raw/sequence_grid_exploration.R. ",
+    "Apply the sequential-grid exploration harness before knitting this report."
+  )
+}
+
+source(
+  exploration_script,
+  local = knitr::knit_global()
+)
+
+dat <- data.frame(
+  group = rep(c("A", "B", "C"), each = 3),
+  y = 1:9
+)
+
+state <- gotham_state(
+  dat,
+  outcome = "y",
+  group = "group"
+)
+
+tau <- 0.80
+
+alignment_grid <- seq(
+  -1,
+  1,
+  by = 0.25
+)
+
+review <- run_gotham_sequence_grid_review(
+  state = state,
+  steps = 50,
+  threshold = tau,
+  alignment = alignment_grid
+)
+
+trajectory <- review$trajectory
+diagnostics <- review$frontier_diagnostics
+endpoint <- review$summary
+
+zero_icc_formula <- function(n, rho) {
+  (
+    n^2 * rho +
+      n * rho -
+      2 * rho +
+      2
+  ) / (
+    n^2 +
+      n * rho -
+      rho +
+      1
+  )
+}
+
+zero_icc_headroom_formula <- function(n, rho) {
+  (
+    (1 - rho) *
+      (n * rho - rho + 2)
+  ) / (
+    n^2 +
+      n * rho -
+      rho +
+      1
+  )
+}
+
+infinity_icc_formula <- function(n, g) {
+  1 / (
+    g +
+      n * (g - 1)
+  )
+}
+
+normalized_frontier_radius <- function(
+    n,
+    g,
+    tau,
+    alignment) {
+  d_n <- g + n * (g - 1)
+
+  a_n <- (
+    tau * d_n - 1
+  ) / (
+    g * (n + 1) * (1 - tau)
+  )
+
+  gamma_n <- (
+    tau * (n - 1) + 2
+  ) / (
+    tau * (n - 1) + 1
+  )
+
+  if (any(a_n <= 0)) {
+    stop(
+      "The normalized frontier formula requires the H2 regime with a_n > 0."
+    )
+  }
+
+  (
+    alignment +
+      sqrt(
+        alignment^2 +
+          a_n * gamma_n
+      )
+  ) / a_n
+}
+
+normalized_frontier_radius_limit <- function(
+    g,
+    tau,
+    alignment) {
+  a_infinity <- tau * (g - 1) /
+    (
+      g * (1 - tau)
+    )
+
+  (
+    alignment +
+      sqrt(
+        alignment^2 +
+          a_infinity
+      )
+  ) / a_infinity
+}
+
+asymptotic_alignment_drift <- function(
+    g,
+    tau,
+    alignment) {
+  2 * alignment *
+    normalized_frontier_radius_limit(
+      g = g,
+      tau = tau,
+      alignment = alignment
+    )
+}
+
+run_normalized_recurrence <- function(
+    initial_A,
+    initial_n,
+    alignment,
+    g,
+    tau) {
+  steps <- length(alignment)
+
+  out <- data.frame(
+    step = 0:steps,
+    group_size = initial_n + 0:steps,
+    alignment = c(NA_real_, alignment),
+    group_offset_ss = NA_real_,
+    stringsAsFactors = FALSE
+  )
+
+  out$group_offset_ss[[1L]] <- initial_A
+
+  if (steps == 0L) {
+    return(out)
+  }
+
+  for (i in seq_len(steps)) {
+    n_i <- initial_n + i - 1L
+    c_i <- alignment[[i]]
+
+    z_i <- normalized_frontier_radius(
+      n = n_i,
+      g = g,
+      tau = tau,
+      alignment = c_i
+    )
+
+    multiplier_i <- 1 +
+      2 * c_i * z_i / (n_i + 1) +
+      z_i^2 / (n_i + 1)^2
+
+    out$group_offset_ss[[i + 1L]] <-
+      out$group_offset_ss[[i]] *
+      multiplier_i
+  }
+
+  out
+}
+
+normalized_multiplier <- function(
+    n,
+    g,
+    tau,
+    alignment) {
+  z <- normalized_frontier_radius(
+    n = n,
+    g = g,
+    tau = tau,
+    alignment = alignment
+  )
+
+  1 +
+    2 * alignment * z / (n + 1) +
+    z^2 / (n + 1)^2
+}
+
+neutral_positive_share_asymptotic <- function(
+    g,
+    tau,
+    negative_alignment,
+    positive_alignment) {
+  if (
+    negative_alignment >= 0 ||
+      positive_alignment <= 0
+  ) {
+    stop(
+      "Require negative_alignment < 0 < positive_alignment."
+    )
+  }
+
+  h_negative <- asymptotic_alignment_drift(
+    g = g,
+    tau = tau,
+    alignment = negative_alignment
+  )
+
+  h_positive <- asymptotic_alignment_drift(
+    g = g,
+    tau = tau,
+    alignment = positive_alignment
+  )
+
+  -h_negative /
+    (
+      h_positive -
+        h_negative
+    )
+}
+
+neutral_positive_share_finite_n <- function(
+    n,
+    g,
+    tau,
+    negative_alignment,
+    positive_alignment) {
+  m_negative <- normalized_multiplier(
+    n = n,
+    g = g,
+    tau = tau,
+    alignment = negative_alignment
+  )
+
+  m_positive <- normalized_multiplier(
+    n = n,
+    g = g,
+    tau = tau,
+    alignment = positive_alignment
+  )
+
+  -log(m_negative) /
+    (
+      log(m_positive) -
+        log(m_negative)
+    )
+}
+
+exact_structural_neutral_alignment <- function(
+    n,
+    g,
+    tau) {
+  numerator <-
+    g *
+    (1 - tau) *
+    (
+      tau * (n - 1) + 2
+    )
+
+  denominator <-
+    4 *
+    (n + 1) *
+    (g - 1) *
+    (1 + n * tau) *
+    (
+      tau * (n - 1) + 1
+    )
+
+  -sqrt(
+    numerator /
+      denominator
+  )
+}
+
+exact_structural_neutral_normalized_radius <- function(
+    n,
+    g,
+    tau) {
+  c_star <- exact_structural_neutral_alignment(
+    n = n,
+    g = g,
+    tau = tau
+  )
+
+  -2 *
+    c_star *
+    (n + 1)
+}
+
+run_greedy_neutral_controller <- function(
+    initial_A,
+    initial_n,
+    steps,
+    g,
+    tau,
+    negative_alignment,
+    positive_alignment) {
+  out <- data.frame(
+    step = 0:steps,
+    group_size = initial_n + 0:steps,
+    alignment = NA_real_,
+    group_offset_ss = NA_real_,
+    log_ratio_to_initial = NA_real_,
+    stringsAsFactors = FALSE
+  )
+
+  out$group_offset_ss[[1L]] <- initial_A
+  out$log_ratio_to_initial[[1L]] <- 0
+
+  cumulative_log_ratio <- 0
+
+  for (i in seq_len(steps)) {
+    n_i <- initial_n + i - 1L
+
+    m_negative <- normalized_multiplier(
+      n = n_i,
+      g = g,
+      tau = tau,
+      alignment = negative_alignment
+    )
+
+    m_positive <- normalized_multiplier(
+      n = n_i,
+      g = g,
+      tau = tau,
+      alignment = positive_alignment
+    )
+
+    candidate_negative <-
+      cumulative_log_ratio +
+      log(m_negative)
+
+    candidate_positive <-
+      cumulative_log_ratio +
+      log(m_positive)
+
+    if (
+      abs(candidate_positive) <
+        abs(candidate_negative)
+    ) {
+      chosen_alignment <- positive_alignment
+      chosen_multiplier <- m_positive
+      cumulative_log_ratio <- candidate_positive
+    } else {
+      chosen_alignment <- negative_alignment
+      chosen_multiplier <- m_negative
+      cumulative_log_ratio <- candidate_negative
+    }
+
+    out$alignment[[i + 1L]] <-
+      chosen_alignment
+
+    out$group_offset_ss[[i + 1L]] <-
+      out$group_offset_ss[[i]] *
+      chosen_multiplier
+
+    out$log_ratio_to_initial[[i + 1L]] <-
+      cumulative_log_ratio
+  }
+
+  out
+}
+
+diagnostics$icc_at_zero_formula <- zero_icc_formula(
+  diagnostics$group_size,
+  diagnostics$icc_before
+)
+
+diagnostics$icc_at_infinity_formula <- infinity_icc_formula(
+  diagnostics$group_size,
+  state$n_groups
+)
+
+zero_formula_max_error <- max(
+  abs(
+    diagnostics$icc_at_zero -
+      diagnostics$icc_at_zero_formula
+  )
+)
+
+threshold_rows <- diagnostics$step > 1L
+
+zero_threshold_formula_max_error <- max(
+  abs(
+    diagnostics$icc_at_zero[threshold_rows] -
+      zero_icc_formula(
+        diagnostics$group_size[threshold_rows],
+        tau
+      )
+  )
+)
+
+infinity_formula_max_error <- max(
+  abs(
+    diagnostics$icc_at_infinity -
+      diagnostics$icc_at_infinity_formula
+  )
+)
+
+zero_steps <- sort(
+  unique(
+    diagnostics$step
+  )
+)
+
+zero_spread <- do.call(
+  rbind,
+  lapply(
+    zero_steps,
+    function(step_value) {
+      x <- diagnostics$icc_at_zero[
+        diagnostics$step == step_value
+      ]
+
+      data.frame(
+        step = step_value,
+        min = min(x),
+        max = max(x),
+        spread = max(x) - min(x)
+      )
+    }
+  )
+)
+
+root_counts <- as.data.frame(
+  table(
+    diagnostics$n_roots
+  )
+)
+
+names(root_counts) <- c(
+  "n_roots",
+  "count"
+)
+
+h2_condition <- with(
+  diagnostics,
+  icc_at_zero > tau &
+    icc_at_infinity < tau
+)
+
+h2_all_conditions <- all(
+  h2_condition
+)
+
+h2_all_unique_positive_roots <- all(
+  diagnostics$n_roots == 1L &
+    is.finite(diagnostics$radius_1) &
+    diagnostics$radius_1 > 0 &
+    is.na(diagnostics$radius_2)
+)
+
+h2_min_zero_margin <- min(
+  diagnostics$icc_at_zero - tau
+)
+
+h2_min_infinity_margin <- min(
+  tau - diagnostics$icc_at_infinity
+)
+
+h6_trajectory <- trajectory[
+  trajectory$step > 1L,
+  ,
+  drop = FALSE
+]
+
+h6_trajectory$z_observed <- with(
+  h6_trajectory,
+  radius / sqrt(group_offset_ss_before)
+)
+
+h6_trajectory$z_formula <- with(
+  h6_trajectory,
+  normalized_frontier_radius(
+    n = group_size_before,
+    g = state$n_groups,
+    tau = tau,
+    alignment = alignment_fixed
+  )
+)
+
+h6_max_z_error <- max(
+  abs(
+    h6_trajectory$z_observed -
+      h6_trajectory$z_formula
+  )
+)
+
+h6_trajectory$a_multiplier_formula <- with(
+  h6_trajectory,
+  1 +
+    2 * alignment_fixed * z_formula /
+      (group_size_before + 1) +
+    z_formula^2 /
+      (group_size_before + 1)^2
+)
+
+h6_trajectory$group_offset_ss_after_formula <- with(
+  h6_trajectory,
+  group_offset_ss_before *
+    a_multiplier_formula
+)
+
+h6_max_a_relative_error <- max(
+  abs(
+    h6_trajectory$group_offset_ss_after -
+      h6_trajectory$group_offset_ss_after_formula
+  ) /
+    pmax(
+      abs(h6_trajectory$group_offset_ss_after),
+      .Machine$double.eps
+    )
+)
+
+history_alignments <- c(
+  -1,
+  0,
+  1
+)
+
+evaluation_alignments <- c(
+  -0.5,
+  0,
+  0.5
+)
+
+history_states <- lapply(
+  history_alignments,
+  function(history_alignment) {
+    gotham_sequence(
+      state = state,
+      steps = 10,
+      threshold = tau,
+      alignment = history_alignment
+    )$final_state
+  }
+)
+
+h6_history_check <- do.call(
+  rbind,
+  lapply(
+    seq_along(history_states),
+    function(history_index) {
+      history_state <- history_states[[history_index]]
+
+      do.call(
+        rbind,
+        lapply(
+          evaluation_alignments,
+          function(evaluation_alignment) {
+            frontier <- gotham_frontier(
+              state = history_state,
+              threshold = tau,
+              alignment = evaluation_alignment
+            )
+
+            data.frame(
+              history_alignment =
+                history_alignments[[history_index]],
+              evaluation_alignment =
+                evaluation_alignment,
+              group_size =
+                history_state$group_size,
+              group_offset_ss =
+                history_state$group_offset_ss,
+              normalized_radius =
+                frontier$frontier$radius_1[[1L]] /
+                sqrt(
+                  history_state$group_offset_ss
+                ),
+              formula_radius =
+                normalized_frontier_radius(
+                  n = history_state$group_size,
+                  g = history_state$n_groups,
+                  tau = tau,
+                  alignment =
+                    evaluation_alignment
+                ),
+              stringsAsFactors = FALSE
+            )
+          }
+        )
+      )
+    }
+  )
+)
+
+h6_history_check$error <- with(
+  h6_history_check,
+  normalized_radius - formula_radius
+)
+
+h6_max_history_error <- max(
+  abs(
+    h6_history_check$error
+  )
+)
+
+h6_history_spread <- aggregate(
+  normalized_radius ~ evaluation_alignment,
+  data = h6_history_check,
+  FUN = function(x) max(x) - min(x)
+)
+
+names(h6_history_spread)[[2L]] <-
+  "normalized_radius_spread"
+
+h6_max_history_spread <- max(
+  h6_history_spread$normalized_radius_spread
+)
+
+h6_asymptotic <- data.frame(
+  alignment = alignment_grid,
+  z_infinity = normalized_frontier_radius_limit(
+    g = state$n_groups,
+    tau = tau,
+    alignment = alignment_grid
+  ),
+  stringsAsFactors = FALSE
+)
+
+h6_asymptotic$group_offset_power <- with(
+  h6_asymptotic,
+  2 * alignment * z_infinity
+)
+
+h6_asymptotic$radius_power <- with(
+  h6_asymptotic,
+  alignment * z_infinity
+)
+
+threshold_state <- gotham_sequence(
+  state = state,
+  steps = 1,
+  threshold = tau,
+  alignment = 0
+)$final_state
+
+h7_periods <- list(
+  zero = 0,
+  plus_minus_0_25 = c(-0.25, 0.25),
+  plus_minus_0_50 = c(-0.50, 0.50),
+  plus_minus_1_00 = c(-1.00, 1.00)
+)
+
+h7_steps <- 5000L
+
+h7_results <- do.call(
+  rbind,
+  lapply(
+    names(h7_periods),
+    function(schedule_name) {
+      period <- h7_periods[[schedule_name]]
+
+      alignments <- rep(
+        period,
+        length.out = h7_steps
+      )
+
+      path <- run_normalized_recurrence(
+        initial_A =
+          threshold_state$group_offset_ss,
+        initial_n =
+          threshold_state$group_size,
+        alignment = alignments,
+        g = threshold_state$n_groups,
+        tau = tau
+      )
+
+      predicted_exponent <- mean(
+        asymptotic_alignment_drift(
+          g = threshold_state$n_groups,
+          tau = tau,
+          alignment = period
+        )
+      )
+
+      late <- path$step >= floor(
+        0.5 * h7_steps
+      )
+
+      estimated_exponent <- unname(
+        coef(
+          lm(
+            log(group_offset_ss) ~
+              log(group_size),
+            data = path[late, , drop = FALSE]
+          )
+        )[[2L]]
+      )
+
+      data.frame(
+        schedule = schedule_name,
+        raw_mean_alignment = mean(period),
+        predicted_exponent = predicted_exponent,
+        estimated_late_exponent = estimated_exponent,
+        final_group_offset_ratio =
+          tail(path$group_offset_ss, 1L) /
+          path$group_offset_ss[[1L]],
+        stringsAsFactors = FALSE
+      )
+    }
+  )
+)
+
+h7_alt_alignment <- rep(
+  c(-0.5, 0.5),
+  50L
+)
+
+h7_alt_sequence <- gotham_sequence(
+  state = threshold_state,
+  steps = length(h7_alt_alignment),
+  threshold = tau,
+  alignment = h7_alt_alignment
+)
+
+h7_alt_recurrence <- run_normalized_recurrence(
+  initial_A =
+    threshold_state$group_offset_ss,
+  initial_n =
+    threshold_state$group_size,
+  alignment = h7_alt_alignment,
+  g = threshold_state$n_groups,
+  tau = tau
+)
+
+h7_alt_package_A <- c(
+  threshold_state$group_offset_ss,
+  h7_alt_sequence$trajectory$group_offset_ss_after
+)
+
+h7_alt_max_relative_error <- max(
+  abs(
+    h7_alt_package_A -
+      h7_alt_recurrence$group_offset_ss
+  ) /
+    pmax(
+      abs(h7_alt_package_A),
+      .Machine$double.eps
+    )
+)
+
+h7_a_infinity <- tau *
+  (state$n_groups - 1) /
+  (
+    state$n_groups *
+      (1 - tau)
+  )
+
+h7_symmetric_pair <- data.frame(
+  magnitude = c(
+    0.25,
+    0.50,
+    1.00
+  ),
+  pair_mean_alignment = 0,
+  predicted_pair_average_exponent =
+    2 * c(
+      0.25,
+      0.50,
+      1.00
+    )^2 /
+    h7_a_infinity,
+  stringsAsFactors = FALSE
+)
+
+h8_magnitudes <- c(
+  0.25,
+  0.50,
+  1.00
+)
+
+h8_asymptotic_weights <- data.frame(
+  magnitude = h8_magnitudes,
+  positive_share = vapply(
+    h8_magnitudes,
+    function(magnitude) {
+      neutral_positive_share_asymptotic(
+        g = state$n_groups,
+        tau = tau,
+        negative_alignment = -magnitude,
+        positive_alignment = magnitude
+      )
+    },
+    numeric(1)
+  ),
+  stringsAsFactors = FALSE
+)
+
+h8_asymptotic_weights$negative_share <-
+  1 -
+  h8_asymptotic_weights$positive_share
+
+h8_asymptotic_weights$weighted_drift <- vapply(
+  h8_magnitudes,
+  function(magnitude) {
+    p_positive <- neutral_positive_share_asymptotic(
+      g = state$n_groups,
+      tau = tau,
+      negative_alignment = -magnitude,
+      positive_alignment = magnitude
+    )
+
+    h_positive <- asymptotic_alignment_drift(
+      g = state$n_groups,
+      tau = tau,
+      alignment = magnitude
+    )
+
+    h_negative <- asymptotic_alignment_drift(
+      g = state$n_groups,
+      tau = tau,
+      alignment = -magnitude
+    )
+
+    p_positive * h_positive +
+      (1 - p_positive) *
+      h_negative
+  },
+  numeric(1)
+)
+
+h8_finite_n_grid <- c(
+  4L,
+  10L,
+  50L,
+  100L,
+  500L
+)
+
+h8_finite_n_weights <- data.frame(
+  group_size = h8_finite_n_grid,
+  positive_share = vapply(
+    h8_finite_n_grid,
+    function(n_value) {
+      neutral_positive_share_finite_n(
+        n = n_value,
+        g = state$n_groups,
+        tau = tau,
+        negative_alignment = -0.5,
+        positive_alignment = 0.5
+      )
+    },
+    numeric(1)
+  ),
+  stringsAsFactors = FALSE
+)
+
+h8_finite_n_weights$negative_share <-
+  1 -
+  h8_finite_n_weights$positive_share
+
+h8_finite_n_weights$asymptotic_positive_share <-
+  neutral_positive_share_asymptotic(
+    g = state$n_groups,
+    tau = tau,
+    negative_alignment = -0.5,
+    positive_alignment = 0.5
+  )
+
+h8_greedy_results <- do.call(
+  rbind,
+  lapply(
+    h8_magnitudes,
+    function(magnitude) {
+      path <- run_greedy_neutral_controller(
+        initial_A =
+          threshold_state$group_offset_ss,
+        initial_n =
+          threshold_state$group_size,
+        steps = 5000L,
+        g = threshold_state$n_groups,
+        tau = tau,
+        negative_alignment = -magnitude,
+        positive_alignment = magnitude
+      )
+
+      selected <- path$alignment[
+        !is.na(path$alignment)
+      ]
+
+      data.frame(
+        magnitude = magnitude,
+        asymptotic_positive_share =
+          neutral_positive_share_asymptotic(
+            g = threshold_state$n_groups,
+            tau = tau,
+            negative_alignment = -magnitude,
+            positive_alignment = magnitude
+          ),
+        observed_positive_share =
+          mean(
+            selected > 0
+          ),
+        final_group_offset_ratio =
+          tail(
+            path$group_offset_ss,
+            1L
+          ) /
+          path$group_offset_ss[[1L]],
+        max_absolute_log_deviation =
+          max(
+            abs(
+              path$log_ratio_to_initial
+            )
+          ),
+        stringsAsFactors = FALSE
+      )
+    }
+  )
+)
+
+h8_package_controller <- run_greedy_neutral_controller(
+  initial_A =
+    threshold_state$group_offset_ss,
+  initial_n =
+    threshold_state$group_size,
+  steps = 100L,
+  g = threshold_state$n_groups,
+  tau = tau,
+  negative_alignment = -0.5,
+  positive_alignment = 0.5
+)
+
+h8_package_alignments <-
+  h8_package_controller$alignment[
+    !is.na(
+      h8_package_controller$alignment
+    )
+  ]
+
+h8_package_sequence <- gotham_sequence(
+  state = threshold_state,
+  steps = length(
+    h8_package_alignments
+  ),
+  threshold = tau,
+  alignment = h8_package_alignments
+)
+
+h8_package_A <- c(
+  threshold_state$group_offset_ss,
+  h8_package_sequence$trajectory$group_offset_ss_after
+)
+
+h8_controller_max_relative_error <- max(
+  abs(
+    h8_package_A -
+      h8_package_controller$group_offset_ss
+  ) /
+    pmax(
+      abs(h8_package_A),
+      .Machine$double.eps
+    )
+)
+
+h9_n_grid <- c(
+  4L,
+  5L,
+  10L,
+  25L,
+  50L,
+  100L,
+  500L,
+  1000L
+)
+
+h9_neutral_grid <- data.frame(
+  group_size = h9_n_grid,
+  neutral_alignment = vapply(
+    h9_n_grid,
+    function(n_value) {
+      exact_structural_neutral_alignment(
+        n = n_value,
+        g = state$n_groups,
+        tau = tau
+      )
+    },
+    numeric(1)
+  ),
+  neutral_normalized_radius = vapply(
+    h9_n_grid,
+    function(n_value) {
+      exact_structural_neutral_normalized_radius(
+        n = n_value,
+        g = state$n_groups,
+        tau = tau
+      )
+    },
+    numeric(1)
+  ),
+  stringsAsFactors = FALSE
+)
+
+h9_z_zero_limit <- sqrt(
+  state$n_groups *
+    (1 - tau) /
+    (
+      tau *
+        (state$n_groups - 1)
+    )
+)
+
+h9_neutral_grid$scaled_alignment <-
+  h9_neutral_grid$group_size *
+  h9_neutral_grid$neutral_alignment
+
+h9_neutral_grid$asymptotic_scaled_alignment <-
+  -0.5 *
+  h9_z_zero_limit
+
+h9_neutral_grid$asymptotic_normalized_radius <-
+  h9_z_zero_limit
+
+h9_steps <- 200L
+
+h9_alignments <- vapply(
+  seq_len(h9_steps),
+  function(i) {
+    n_value <-
+      threshold_state$group_size +
+      i -
+      1L
+
+    exact_structural_neutral_alignment(
+      n = n_value,
+      g = threshold_state$n_groups,
+      tau = tau
+    )
+  },
+  numeric(1)
+)
+
+h9_sequence <- gotham_sequence(
+  state = threshold_state,
+  steps = h9_steps,
+  threshold = tau,
+  alignment = h9_alignments
+)
+
+h9_A <- c(
+  threshold_state$group_offset_ss,
+  h9_sequence$trajectory$group_offset_ss_after
+)
+
+h9_max_relative_A_drift <- max(
+  abs(
+    h9_A /
+      threshold_state$group_offset_ss -
+      1
+  )
+)
+
+h9_max_icc_error <- max(
+  abs(
+    h9_sequence$trajectory$icc_after -
+      tau
+  )
+)
+
+h9_observed_z <- with(
+  h9_sequence$trajectory,
+  radius /
+    sqrt(
+      group_offset_ss_before
+    )
+)
+
+h9_formula_z <- vapply(
+  seq_len(h9_steps),
+  function(i) {
+    n_value <-
+      threshold_state$group_size +
+      i -
+      1L
+
+    exact_structural_neutral_normalized_radius(
+      n = n_value,
+      g = threshold_state$n_groups,
+      tau = tau
+    )
+  },
+  numeric(1)
+)
+
+h9_max_z_error <- max(
+  abs(
+    h9_observed_z -
+      h9_formula_z
+  )
+)
+
+h9_selected_steps <- c(
+  1L,
+  2L,
+  10L,
+  50L,
+  100L,
+  200L
+)
+
+h9_sequence_table <- data.frame(
+  step = h9_selected_steps,
+  group_size_before =
+    h9_sequence$trajectory$group_size_before[
+      h9_selected_steps
+    ],
+  alignment =
+    h9_sequence$trajectory$alignment_requested[
+      h9_selected_steps
+    ],
+  radius =
+    h9_sequence$trajectory$radius[
+      h9_selected_steps
+    ],
+  group_offset_ss_before =
+    h9_sequence$trajectory$group_offset_ss_before[
+      h9_selected_steps
+    ],
+  group_offset_ss_after =
+    h9_sequence$trajectory$group_offset_ss_after[
+      h9_selected_steps
+    ],
+  icc_after =
+    h9_sequence$trajectory$icc_after[
+      h9_selected_steps
+    ],
+  stringsAsFactors = FALSE
+)
+
+find_endpoint_bracket <- function(
+    summary,
+    column,
+    target = 1) {
+  ordered <- summary[
+    order(summary$alignment),
+    c("alignment", column),
+    drop = FALSE
+  ]
+
+  delta <- ordered[[column]] - target
+
+  for (i in seq_len(nrow(ordered) - 1L)) {
+    if (delta[[i]] == 0) {
+      return(
+        c(
+          lower = ordered$alignment[[i]],
+          upper = ordered$alignment[[i]]
+        )
+      )
+    }
+
+    if (
+      is.finite(delta[[i]]) &&
+        is.finite(delta[[i + 1L]]) &&
+        sign(delta[[i]]) != sign(delta[[i + 1L]])
+    ) {
+      return(
+        c(
+          lower = ordered$alignment[[i]],
+          upper = ordered$alignment[[i + 1L]]
+        )
+      )
+    }
+  }
+
+  c(
+    lower = NA_real_,
+    upper = NA_real_
+  )
+}
+
+offset_neutral_bracket <- find_endpoint_bracket(
+  endpoint,
+  "group_offset_ss_ratio"
+)
+
+radius_neutral_bracket <- find_endpoint_bracket(
+  endpoint,
+  "radius_ratio"
+)
+
+hypotheses <- data.frame(
+  ID = c(
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "H7",
+    "H8",
+    "H9"
+  ),
+  Candidate = c(
+    "Zero-radius headroom is path-invariant",
+    "Threshold-hugging centered rays have one positive frontier crossing under a simple sufficient condition",
+    "Orthogonality is not structural neutrality",
+    "A critical fixed alignment separates contraction from expansion of between-group geometry",
+    "The critical alignment for frontier-radius growth differs from the critical alignment for group-separation growth",
+    "Threshold-state dynamics admit a scale-free normalized recurrence",
+    "Mean-zero variable alignment is not generally Gotham-neutral",
+    "Gotham-neutral mixed policies require asymmetric directional weighting",
+    "The exact one-step structurally neutral alignment is slightly opposing"
+  ),
+  Current_status = c(
+    "Exact identity derived and numerically verified",
+    "Exact sufficient condition derived and numerically verified",
+    "Exact consequence of the update identity",
+    "H9 gives exact per-step neutral alignment c_n* < 0 with c_n* -> 0",
+    "Finite-horizon distinction retained; H6 predicts common asymptotic boundary c = 0",
+    "Exact normalized recurrence derived and numerically verified",
+    "Exact cumulative-drift criterion derived; symmetric alternation expands",
+    "Exact asymptotic weighting rule and finite-n log-neutral policy derived and verified",
+    "Exact neutral alignment and radius derived; package verification added"
+  ),
+  stringsAsFactors = FALSE
+)
+```
+
+# Purpose
+
+This is an internal research notebook for the statistical Gotham Loops framework. It is intentionally exploratory rather than package-facing documentation. The goal is to connect reproducible plots and numerical diagnostics to candidate mathematical statements, then decide which statements are worth deeper simulation, derivation, or formal proof.
+
+The current notebook uses the canonical balanced three-group example, a fixed ICC threshold of 0.80, 50 sequential updates, and fixed alignments from -1 to 1 in increments of 0.25. These values are illustrative rather than universal.
+
+# Hypothesis Registry
+
+```{r hypothesis-registry}
+knitr::kable(
+  hypotheses,
+  row.names = FALSE
+)
+```
+
+# Current Sequence Geometry
+
+## Relative Frontier Radius
+
+```{r radius-trajectories, fig.width=7, fig.height=5}
+plot_gotham_sequence_grid(
+  review,
+  metric = "radius",
+  log_y = TRUE,
+  relative = TRUE
+)
+```
+
+## Relative Between-Group Geometry
+
+```{r group-offset-trajectories, fig.width=7, fig.height=5}
+plot_gotham_sequence_grid(
+  review,
+  metric = "group_offset_ss",
+  log_y = TRUE,
+  relative = TRUE
+)
+```
+
+## 50-Step Endpoint
+
+```{r endpoint-plot, fig.width=7, fig.height=5}
+plot_gotham_sequence_grid_endpoint(
+  review,
+  metric = "group_offset_ss_ratio"
+)
+```
+
+The 50-step endpoint ratios are:
+
+```{r endpoint-table}
+knitr::kable(
+  endpoint[
+    ,
+    c(
+      "alignment",
+      "radius_ratio",
+      "group_offset_ss_ratio",
+      "ss_within_ratio",
+      "min_icc_at_zero",
+      "any_two_roots"
+    )
+  ],
+  digits = 5,
+  row.names = FALSE
+)
+```
+
+# H1. Zero-Radius Headroom Is Path-Invariant
+
+## Numerical observation
+
+At a common step, all fixed-alignment trajectories return the same `icc_at_zero` value even though their group-separation and within-group sums of squares are very different.
+
+The largest observed alignment-to-alignment spread in `icc_at_zero` over the 50-step review is:
+
+```{r zero-spread}
+max(
+  zero_spread$spread
+)
+```
+
+```{r zero-headroom-plot, fig.width=7, fig.height=4}
+zero_one_path <- diagnostics[
+  diagnostics$alignment == diagnostics$alignment[[1L]],
+  ,
+  drop = FALSE
+]
+
+plot(
+  zero_one_path$step,
+  zero_one_path$icc_at_zero,
+  type = "l",
+  lwd = 2,
+  xlab = "Step",
+  ylab = "ICC at zero-radius proposal",
+  main = "Zero-radius ICC headroom"
+)
+
+abline(
+  h = tau,
+  lty = 2
+)
+```
+
+## Exact identity
+
+Let the current balanced state have common group size \(n\) and current ICC \(\rho\). Define
+
+\[
+q = \frac{MS_B}{MS_W}.
+\]
+
+The one-way ANOVA ICC identity gives
+
+\[
+\rho
+=
+\frac{q-1}{q+n-1},
+\]
+
+so
+
+\[
+q
+=
+\frac{1+\rho(n-1)}{1-\rho}.
+\]
+
+Now add one observation to every group exactly at that group's current mean. The group means and grand mean do not change. Therefore the within-group sum of squares is unchanged, while the between-group sum of squares is multiplied by \((n+1)/n\). Because the within-group degrees of freedom increase from \(G(n-1)\) to \(Gn\),
+
+\[
+MS_B^{+}
+=
+\frac{n+1}{n}MS_B
+\]
+
+and
+
+\[
+MS_W^{+}
+=
+\frac{n-1}{n}MS_W.
+\]
+
+The new common group size is \(n+1\), so the updated ICC is
+
+\[
+\rho_0
+=
+\frac{
+MS_B^{+}-MS_W^{+}
+}{
+MS_B^{+}+nMS_W^{+}
+}.
+\]
+
+Substituting \(q=MS_B/MS_W\) gives
+
+\[
+\rho_0
+=
+\frac{
+(n+1)q-(n-1)
+}{
+(n+1)q+n(n-1)
+}.
+\]
+
+Substituting the expression for \(q\) and simplifying yields
+
+\[
+\boxed{
+\rho_0(n,\rho)
+=
+\frac{
+n^2\rho+n\rho-2\rho+2
+}{
+n^2+n\rho-\rho+1
+}
+}.
+\]
+
+The zero-radius headroom is therefore
+
+\[
+\boxed{
+\rho_0(n,\rho)-\rho
+=
+\frac{
+(1-\rho)(n\rho-\rho+2)
+}{
+n^2+n\rho-\rho+1
+}
+}.
+\]
+
+For \(0 \le \rho < 1\), this quantity is strictly positive. Thus adding one observation exactly at every current group mean always increases the ANOVA ICC under the present balanced setup.
+
+The identity contains neither \(G\) nor the separate values of \(SS_B\) and \(SS_W\). Conditional on the current group size and current ICC, the zero-radius ICC is therefore independent of the alignment path and of the absolute scale of the grouped data.
+
+For fixed \(0 < \rho < 1\),
+
+\[
+\rho_0(n,\rho)-\rho
+=
+\frac{\rho(1-\rho)}{n}
++
+O(n^{-2}),
+\]
+
+so the headroom decays at rate \(1/n\). At \(\rho=0\), the leading rate is \(O(n^{-2})\).
+
+## Numerical verification
+
+The first step of the canonical sequence does **not** begin at the target threshold: its current ICC is approximately 0.89655. This is why evaluating the formula with \(\tau=0.80\) for all 450 diagnostics produced the earlier maximum discrepancy of about 0.06776.
+
+Using each row's actual `icc_before`, the maximum absolute discrepancy between the identity and `gotham_frontier()` across all 450 step-by-alignment diagnostics is:
+
+```{r zero-formula-error}
+zero_formula_max_error
+```
+
+After the first update, every trajectory begins each subsequent step at \(\rho=\tau=0.80\). Restricting the threshold-formula check to steps 2 through 50 gives maximum absolute discrepancy:
+
+```{r zero-threshold-formula-error}
+zero_threshold_formula_max_error
+```
+
+For the canonical first step, \(n=3\) and \(\rho=26/29\), giving:
+
+```{r zero-first-step-check}
+zero_icc_formula(
+  n = 3,
+  rho = 26 / 29
+)
+```
+
+At step 50, the pre-update common group size is \(n=52\) and \(\rho=0.80\), giving:
+
+```{r zero-step-50-check}
+zero_icc_formula(
+  n = 52,
+  rho = 0.80
+)
+```
+
+which matches the observed minimum `icc_at_zero` of approximately 0.8031175.
+
+**Status:** H1 is proved exactly under the current balanced one-way ANOVA ICC formulation and verified numerically against the package calculations.
+
+# H2. Why No Two-Root Behavior Appeared
+
+Across the 50-step alignment grid, the observed frontier-root counts are:
+
+```{r root-count-table}
+knitr::kable(
+  root_counts,
+  row.names = FALSE
+)
+```
+
+No two-root behavior appeared.
+
+## Exact sufficient condition
+
+For a centered proposal, write
+
+\[
+A = ||\mathbf{a}||^2
+\]
+
+for the current group-offset sum of squares and \(W=SS_W\) for the current within-group sum of squares. At target ICC \(\tau\), define \(C_\tau\) so that the frontier condition is
+
+\[
+SS_B' = C_\tau SS_W'.
+\]
+
+For current common group size \(n\),
+
+\[
+C_\tau
+=
+\frac{
+(G-1)(1+n\tau)
+}{
+Gn(1-\tau)
+}.
+\]
+
+Along a centered ray with radius \(r\) and alignment \(c\),
+
+\[
+SS_B'
+=
+(n+1)A
++
+2\sqrt{A}\,cr
++
+\frac{r^2}{n+1}
+\]
+
+and
+
+\[
+SS_W'
+=
+W
++
+\frac{n}{n+1}r^2.
+\]
+
+Therefore the threshold equation can be written
+
+\[
+f_c(r)
+=
+\alpha r^2
++
+\beta r
++
+\gamma
+=
+0,
+\]
+
+where
+
+\[
+\alpha
+=
+\frac{1-C_\tau n}{n+1},
+\qquad
+\beta
+=
+2\sqrt{A}\,c,
+\qquad
+\gamma
+=
+(n+1)A-C_\tau W.
+\]
+
+The sign of \(\gamma=f_c(0)\) records which side of the threshold contains the zero-radius proposal. In particular,
+
+\[
+\rho_0>\tau
+\quad\Longleftrightarrow\quad
+\gamma>0.
+\]
+
+As \(r\rightarrow\infty\), the ICC converges to
+
+\[
+\boxed{
+\rho_\infty(n,G)
+=
+\frac{1}{
+G+n(G-1)
+}
+}.
+\]
+
+Equivalently,
+
+\[
+\rho_\infty<\tau
+\quad\Longleftrightarrow\quad
+\alpha<0.
+\]
+
+Hence, whenever
+
+\[
+\boxed{
+\rho_0>\tau>\rho_\infty
+},
+\]
+
+we have
+
+\[
+\gamma>0
+\quad\text{and}\quad
+\alpha<0.
+\]
+
+The product of the two quadratic roots is
+
+\[
+\frac{\gamma}{\alpha}<0.
+\]
+
+The discriminant is also strictly positive because
+
+\[
+\beta^2-4\alpha\gamma
+>
+\beta^2
+\ge 0.
+\]
+
+Thus the two real roots have opposite signs. There is exactly one positive frontier crossing for every alignment \(c\in[-1,1]\).
+
+This proves the proposed sufficient condition.
+
+## Threshold-hugging corollary
+
+Suppose the current state itself is already on the threshold,
+
+\[
+\rho=\tau<1.
+\]
+
+H1 gives
+
+\[
+\rho_0(n,\tau)>\tau.
+\]
+
+Therefore the unique-positive-root condition reduces to
+
+\[
+\boxed{
+\tau
+>
+\frac{1}{
+G+n(G-1)
+}
+}.
+\]
+
+Because \(\rho_\infty(n,G)\) decreases as \(n\) increases, once this inequality holds at a threshold-hugging step it continues to hold at every later step.
+
+Thus, for the present sequential process, two-root or re-entry behavior cannot suddenly emerge at a later step once the process is on the threshold and this inequality is satisfied.
+
+This explains why extending the current 50-step run to hundreds of steps would not reveal two-root behavior under the same setup.
+
+## Alignment monotonicity corollary
+
+In this regime the positive root is
+
+\[
+r_\tau(c)
+=
+\frac{
+-\beta-\sqrt{\beta^2-4\alpha\gamma}
+}{
+2\alpha
+},
+\]
+
+because \(\alpha<0\). At that root,
+
+\[
+\frac{\partial f_c}{\partial r}
+=
+-\sqrt{\beta^2-4\alpha\gamma}
+<
+0.
+\]
+
+Implicit differentiation therefore gives
+
+\[
+\frac{dr_\tau}{dc}
+=
+\frac{
+2\sqrt{A}\,r_\tau
+}{
+\sqrt{\beta^2-4\alpha\gamma}
+}
+>
+0
+\]
+
+for nondegenerate \(A>0\) and \(r_\tau>0\).
+
+So, for a fixed state satisfying the H2 conditions, the centered frontier radius is strictly increasing with alignment. This formally explains the smooth left-to-right ordering of the static Gotham frontier.
+
+## Numerical verification
+
+The candidate large-radius identity is verified exactly by the current frontier calculations:
+
+```{r infinity-formula-error}
+infinity_formula_max_error
+```
+
+Across all 450 step-by-alignment diagnostics, the sufficient inequalities
+
+\[
+\rho_0>\tau>\rho_\infty
+\]
+
+hold:
+
+```{r h2-condition-check}
+h2_all_conditions
+```
+
+The smallest observed zero-radius margin above the threshold is:
+
+```{r h2-zero-margin}
+h2_min_zero_margin
+```
+
+The smallest observed margin of the threshold above the infinite-radius limit is:
+
+```{r h2-infinity-margin}
+h2_min_infinity_margin
+```
+
+And every one of the 450 cases has exactly one finite positive root and no second non-negative root:
+
+```{r h2-root-check}
+h2_all_unique_positive_roots
+```
+
+**Status:** H2 is proved as a sufficient-condition result under the current centered balanced one-way ANOVA formulation. The general `gotham_frontier()` implementation should continue to allow zero, one, or two roots because states outside these conditions can have different frontier topology.
+
+# H3. Orthogonality Is Not Structural Neutrality
+
+For centered proposal radius \(r\), alignment \(c\), current group-offset norm \(\|\mathbf{a}\|\), and current group size \(n\), the updated group-offset sum of squares is
+
+\[
+A'
+=
+A
++
+\frac{2\sqrt{A}\,r\,c}{n+1}
++
+\frac{r^2}{(n+1)^2},
+\]
+
+where \(A=\|\mathbf{a}\|^2\).
+
+At \(c=0\),
+
+\[
+A'
+=
+A
++
+\frac{r^2}{(n+1)^2}
+>
+A
+\]
+
+whenever \(r>0\).
+
+This explains why the orthogonal trajectory in the plot rises above 1 rather than remaining structurally flat. Zero alignment removes the linear cross-product term, but it does not remove the positive quadratic contribution from the proposal.
+
+For the present 50-step run:
+
+```{r orthogonal-endpoint}
+knitr::kable(
+  endpoint[
+    endpoint$alignment == 0,
+    c(
+      "alignment",
+      "radius_ratio",
+      "group_offset_ss_ratio",
+      "ss_within_ratio"
+    ),
+    drop = FALSE
+  ],
+  digits = 5,
+  row.names = FALSE
+)
+```
+
+**Status:** Exact consequence of the update identity. This is conceptually important because "orthogonal" and "neutral" should not be used interchangeably.
+
+# H4. A Critical Alignment Separates Structural Contraction and Expansion
+
+The endpoint plot shows monotone ordering by alignment. Negative alignment contracts between-group geometry strongly; positive alignment expands it strongly.
+
+On the current coarse alignment grid, the 50-step value where final group-offset SS changes from below to above its initial value is bracketed by:
+
+```{r offset-bracket}
+offset_neutral_bracket
+```
+
+This bracket lies between -0.25 and 0 in the present run.
+
+**Hypothesis:** For fixed \(G\), \(\tau\), and starting group size, there is a critical fixed alignment \(c_A\) separating long-run contraction from expansion of \(A_t=\|\mathbf{a}_t\|^2\).
+
+Important open questions:
+
+- Does \(c_A\) depend on step or approach a limiting value?
+- Does the critical value approach 0 from below as group size grows?
+- Is the trajectory monotone in alignment for all steps?
+- Can the critical alignment be obtained from a normalized recurrence rather than simulation?
+
+# H5. Radius Neutrality and Structural Neutrality Are Different
+
+The relative frontier-radius plot shows a second transition. At 50 steps, the alignment where the final frontier radius changes from below to above its step-1 radius is bracketed by:
+
+```{r radius-bracket}
+radius_neutral_bracket
+```
+
+In the present grid this is between 0 and 0.25, whereas the structural group-offset transition is between -0.25 and 0.
+
+The \(c=0.25\) trajectory is especially interesting because the frontier radius initially falls and later grows beyond its step-1 value.
+
+```{r radius-transition-table}
+knitr::kable(
+  endpoint[
+    endpoint$alignment %in% c(0, 0.25, 0.5),
+    c(
+      "alignment",
+      "first_radius",
+      "min_radius",
+      "last_radius",
+      "radius_ratio",
+      "group_offset_ss_ratio"
+    ),
+    drop = FALSE
+  ],
+  digits = 5,
+  row.names = FALSE
+)
+```
+
+**Hypothesis:** There are at least two distinct notions of a Gotham "neutral direction":
+
+1. a direction that leaves the between-group geometry asymptotically stable; and
+2. a direction that leaves the admissible frontier radius asymptotically stable.
+
+These need not coincide.
+
+# H6. Threshold-State Dynamics Admit a Scale-Free Recurrence
+
+H6 can be derived exactly once the current state lies on the ICC threshold.
+
+Let
+
+\[
+A_n
+=
+||\mathbf{a}_n||^2
+\]
+
+be the current group-offset sum of squares when each group contains \(n\) observations, and let
+
+\[
+W_n
+=
+SS_{W,n}.
+\]
+
+Suppose the current state satisfies
+
+\[
+ICC_n=\tau.
+\]
+
+## Threshold state fixes the within/between scale ratio
+
+Write
+
+\[
+q_n
+=
+\frac{MS_B}{MS_W}.
+\]
+
+From the one-way ANOVA ICC identity,
+
+\[
+\tau
+=
+\frac{
+q_n-1
+}{
+q_n+n-1
+},
+\]
+
+so
+
+\[
+q_n
+=
+\frac{
+1+(n-1)\tau
+}{
+1-\tau
+}.
+\]
+
+But
+
+\[
+MS_B
+=
+\frac{
+nA_n
+}{
+G-1
+}
+\]
+
+and
+
+\[
+MS_W
+=
+\frac{
+W_n
+}{
+G(n-1)
+}.
+\]
+
+Therefore
+
+\[
+\boxed{
+\frac{W_n}{A_n}
+=
+\lambda_n
+=
+\frac{
+nG(n-1)(1-\tau)
+}{
+(G-1)\{1+(n-1)\tau\}
+}
+}.
+\]
+
+Thus, on the threshold, \(W_n\) is proportional to \(A_n\), with a proportionality constant determined only by \(n\), \(G\), and \(\tau\).
+
+## Normalize the frontier radius
+
+Let the next centered proposal have radius \(r_n\) and alignment \(c\). Define the normalized radius
+
+\[
+z_n
+=
+\frac{
+r_n
+}{
+\sqrt{A_n}
+}.
+\]
+
+The next-step between-group and within-group sums of squares are
+
+\[
+SS_B'
+=
+(n+1)A_n
++
+2\sqrt{A_n}\,c\,r_n
++
+\frac{
+r_n^2
+}{
+n+1
+}
+\]
+
+and
+
+\[
+SS_W'
+=
+W_n
++
+\frac{
+n
+}{
+n+1
+}r_n^2.
+\]
+
+For the updated state to lie on the same ICC threshold \(\tau\),
+
+\[
+SS_B'
+=
+C_{\tau,n}SS_W',
+\]
+
+where
+
+\[
+C_{\tau,n}
+=
+\frac{
+(G-1)(1+n\tau)
+}{
+Gn(1-\tau)
+}.
+\]
+
+Divide the frontier equation by \(A_n\), substitute \(r_n=z_n\sqrt{A_n}\), and substitute \(W_n/A_n=\lambda_n\). The absolute scale \(A_n\) disappears completely.
+
+After simplification, the normalized frontier equation is
+
+\[
+-a_n z_n^2
++
+2cz_n
++
+\gamma_n
+=
+0,
+\]
+
+where
+
+\[
+\boxed{
+a_n
+=
+\frac{
+\tau\{G+n(G-1)\}-1
+}{
+G(n+1)(1-\tau)
+}
+}
+\]
+
+and
+
+\[
+\boxed{
+\gamma_n
+=
+\frac{
+\tau(n-1)+2
+}{
+\tau(n-1)+1
+}
+}.
+\]
+
+Under the H2 regime, \(a_n>0\). Therefore the unique positive normalized frontier radius is
+
+\[
+\boxed{
+z_n(c)
+=
+\frac{
+c+
+\sqrt{
+c^2+a_n\gamma_n
+}
+}{
+a_n
+}
+}.
+\]
+
+This proves the scale-free part of H6:
+
+\[
+\boxed{
+\frac{
+r_n
+}{
+\sqrt{A_n}
+}
+=
+z_n(c)
+}
+\]
+
+depends only on \(n\), \(G\), \(\tau\), and \(c\), not on the absolute scale of \(A_n\) and not on the history that produced the threshold state.
+
+## Exact multiplicative recurrence
+
+The updated group-offset sum of squares is
+
+\[
+A_{n+1}
+=
+A_n
++
+\frac{
+2\sqrt{A_n}\,r_n c
+}{
+n+1
+}
++
+\frac{
+r_n^2
+}{
+(n+1)^2
+}.
+\]
+
+Using \(r_n=z_n\sqrt{A_n}\),
+
+\[
+\boxed{
+A_{n+1}
+=
+A_n
+\left[
+1+
+\frac{
+2cz_n(c)
+}{
+n+1
+}
++
+\frac{
+z_n(c)^2
+}{
+(n+1)^2
+}
+\right].
+}
+\]
+
+Thus the sequential threshold-hugging process reduces to a one-dimensional multiplicative recurrence for \(A_n\) once the alignment sequence is specified.
+
+For a fixed alignment \(c\), define
+
+\[
+m_n(c)
+=
+1+
+\frac{
+2cz_n(c)
+}{
+n+1
+}
++
+\frac{
+z_n(c)^2
+}{
+(n+1)^2
+}.
+\]
+
+Then
+
+\[
+\boxed{
+A_{n+1}
+=
+A_nm_n(c).
+}
+\]
+
+This is the exact normalized recurrence proposed in H6.
+
+## Numerical verification against package trajectories
+
+For steps 2 through 50 of all nine fixed-alignment trajectories, the maximum absolute discrepancy between
+
+\[
+r_n/\sqrt{A_n}
+\]
+
+from `gotham_sequence()` and the closed-form \(z_n(c)\) is:
+
+```{r h6-z-error}
+h6_max_z_error
+```
+
+The maximum relative discrepancy between the observed `group_offset_ss_after` and the exact multiplicative recurrence is:
+
+```{r h6-a-error}
+h6_max_a_relative_error
+```
+
+## History-invariance check
+
+To check the path-invariance interpretation directly, three very different threshold states were generated after 10 steps using fixed history alignments \(-1\), \(0\), and \(1\). Their absolute group-offset scales differ substantially. Each state was then evaluated at common frontier alignments \(-0.5\), \(0\), and \(0.5\).
+
+```{r h6-history-table}
+knitr::kable(
+  h6_history_check,
+  digits = 8,
+  row.names = FALSE
+)
+```
+
+The maximum discrepancy from the closed-form normalized radius across these history/evaluation combinations is:
+
+```{r h6-history-error}
+h6_max_history_error
+```
+
+The largest spread in normalized radius across the three different histories at a common evaluation alignment is:
+
+```{r h6-history-spread}
+h6_max_history_spread
+```
+
+## Asymptotic consequence
+
+For fixed \(G\), \(0<\tau<1\), and fixed alignment \(c\),
+
+\[
+a_n
+\longrightarrow
+a_\infty
+=
+\frac{
+\tau(G-1)
+}{
+G(1-\tau)
+}
+\]
+
+and
+
+\[
+\gamma_n
+\longrightarrow
+1.
+\]
+
+Therefore
+
+\[
+z_n(c)
+\longrightarrow
+z_\infty(c)
+=
+\frac{
+c+\sqrt{c^2+a_\infty}
+}{
+a_\infty
+}.
+\]
+
+The exact multiplicative factor satisfies
+
+\[
+m_n(c)
+=
+1+
+\frac{
+2cz_\infty(c)
+}{
+n
+}
++
+O(n^{-2}).
+\]
+
+Consequently,
+
+\[
+\log A_n
+=
+2cz_\infty(c)\log n
++
+O(1),
+\]
+
+so, up to a positive multiplicative constant,
+
+\[
+\boxed{
+A_n
+\asymp
+n^{\,2cz_\infty(c)}
+}
+\]
+
+for \(c\ne0\). Because
+
+\[
+r_n
+=
+z_n(c)\sqrt{A_n},
+\]
+
+the frontier radius satisfies
+
+\[
+\boxed{
+r_n
+\asymp
+n^{\,cz_\infty(c)}
+}
+\]
+
+for \(c\ne0\).
+
+At \(c=0\), the first-order \(1/n\) term vanishes. Instead,
+
+\[
+m_n(0)
+=
+1+
+O(n^{-2}),
+\]
+
+and the infinite product of these factors converges. Therefore \(A_n\) increases by finite total multiplication and converges to a finite positive limit; \(r_n\) also converges to a finite positive limit.
+
+This gives three asymptotic regimes:
+
+- \(c<0\): \(A_n\rightarrow0\) and \(r_n\rightarrow0\);
+- \(c=0\): \(A_n\) and \(r_n\) approach finite positive limits;
+- \(c>0\): \(A_n\rightarrow\infty\) and \(r_n\rightarrow\infty\).
+
+For the canonical \(G=3\), \(\tau=0.80\) example, the limiting normalized radii and power-law exponents are:
+
+```{r h6-asymptotic-table}
+knitr::kable(
+  h6_asymptotic,
+  digits = 6,
+  row.names = FALSE
+)
+```
+
+## Consequence for H4 and H5
+
+The recurrence clarifies the two apparent 50-step transition points.
+
+The finite-horizon endpoint plot placed the group-offset crossing between \(-0.25\) and \(0\), while the frontier-radius crossing lay between \(0\) and \(0.25\). Those are finite-horizon comparisons against the original scale.
+
+Asymptotically, however, the recurrence shows that the critical alignment for both qualitative regimes is exactly
+
+\[
+\boxed{c=0}.
+\]
+
+What differs at finite horizons is the amount of accumulated transient scaling before the asymptotic power law dominates.
+
+Thus the current evidence does **not** support two distinct asymptotic critical alignments. Instead, it supports a shared asymptotic boundary at zero alignment plus distinct finite-horizon neutral points.
+
+**Status:** H6 is derived exactly under the current threshold-hugging centered balanced one-way ANOVA formulation. The recurrence also resolves the main asymptotic part of H4 and qualifies the original interpretation of H5.
+
+# H7. Mean-Zero Variable Alignment Is Not Generally Gotham-Neutral
+
+H6 extends immediately to a variable alignment sequence
+
+\[
+c_n\in[-1,1].
+\]
+
+The exact recurrence becomes
+
+\[
+A_{n+1}
+=
+A_n m_n(c_n),
+\]
+
+with
+
+\[
+m_n(c_n)
+=
+1+
+\frac{
+2c_n z_n(c_n)
+}{
+n+1
+}
++
+\frac{
+z_n(c_n)^2
+}{
+(n+1)^2
+}.
+\]
+
+Therefore
+
+\[
+\boxed{
+A_N
+=
+A_{n_0}
+\prod_{n=n_0}^{N-1}
+m_n(c_n)
+}.
+\]
+
+The entire variable-alignment history enters through a product of known one-step multipliers.
+
+## Asymptotic cumulative-drift criterion
+
+Define
+
+\[
+h(c)
+=
+2c z_\infty(c).
+\]
+
+From H6,
+
+\[
+\log m_n(c_n)
+=
+\frac{
+h(c_n)
+}{
+n
+}
++
+O(n^{-2}),
+\]
+
+uniformly for \(c_n\in[-1,1]\). Hence
+
+\[
+\boxed{
+\log A_N
+=
+\log A_{n_0}
++
+\sum_{n=n_0}^{N-1}
+\frac{
+h(c_n)
+}{
+n
+}
++
+O(1)
+}.
+\]
+
+This gives a cumulative criterion:
+
+- if the weighted drift sum diverges to \(+\infty\), then \(A_N\rightarrow\infty\);
+- if it diverges to \(-\infty\), then \(A_N\rightarrow0\);
+- if it converges, then \(A_N\) approaches a finite positive limit.
+
+So the relevant long-run summary is not the ordinary mean of the alignments. It is the harmonic-time accumulation of the nonlinear drift \(h(c_n)\).
+
+## Symmetric positive and negative alignments are not neutral
+
+Let
+
+\[
+a_\infty
+=
+\frac{
+\tau(G-1)
+}{
+G(1-\tau)
+}.
+\]
+
+Recall
+
+\[
+z_\infty(c)
+=
+\frac{
+c+\sqrt{c^2+a_\infty}
+}{
+a_\infty
+}.
+\]
+
+For any \(c>0\),
+
+\[
+z_\infty(c)-z_\infty(-c)
+=
+\frac{
+2c
+}{
+a_\infty
+}.
+\]
+
+Therefore
+
+\[
+h(c)+h(-c)
+=
+2c z_\infty(c)
+-
+2c z_\infty(-c)
+=
+\frac{
+4c^2
+}{
+a_\infty
+}
+>
+0.
+\]
+
+Thus an exactly symmetric alternating sequence
+
+\[
+-c,+c,-c,+c,\ldots
+\]
+
+has raw mean alignment zero but positive asymptotic Gotham drift.
+
+Its average power-law exponent for \(A_n\) is
+
+\[
+\boxed{
+\bar h_{\pm c}
+=
+\frac{
+2c^2
+}{
+a_\infty
+}
+>0.
+}
+\]
+
+This is a strong asymmetry result: equal-magnitude reinforcement and opposition do not cancel in the long run.
+
+For the canonical \(G=3\), \(\tau=0.80\) example:
+
+```{r h7-symmetric-pair-table}
+knitr::kable(
+  h7_symmetric_pair,
+  digits = 6,
+  row.names = FALSE
+)
+```
+
+All of these schedules have mean alignment exactly zero, yet all have positive predicted expansion exponents.
+
+## Exact recurrence versus package sequence
+
+For 100 threshold-hugging steps alternating between \(-0.5\) and \(+0.5\), the maximum relative discrepancy between the H6 recurrence and `gotham_sequence()` is:
+
+```{r h7-package-recurrence-error}
+h7_alt_max_relative_error
+```
+
+## Long-run numerical illustration
+
+The exact normalized recurrence was propagated for 5,000 steps for several periodic schedules:
+
+```{r h7-long-run-table}
+knitr::kable(
+  h7_results,
+  digits = 6,
+  row.names = FALSE
+)
+```
+
+For the alternating schedules, the raw mean alignment is zero, but the fitted late-time log-log slope is positive and approaches the predicted exponent.
+
+The all-zero schedule is different. Its first-order drift is exactly zero, leaving only the summable \(O(n^{-2})\) contribution identified in H6, so it approaches a finite positive limit.
+
+## Interpretation
+
+This adds an important distinction to the Gotham framework:
+
+\[
+\boxed{
+\text{mean alignment } = 0
+\quad\not\Rightarrow\quad
+\text{long-run structural neutrality}.
+}
+\]
+
+A sequence can contain equal amounts of positive and negative directional alignment and still expand the between-group geometry because reinforcement and opposition have asymmetric normalized frontier radii.
+
+A genuinely neutral variable-alignment policy must balance the nonlinear drift \(h(c)\), not merely the raw alignments \(c\).
+
+**Status:** H7 is an exact consequence of the H6 recurrence. The symmetric-alternation result is proved analytically and checked numerically against both the recurrence and `gotham_sequence()`.
+
+# H8. Gotham-Neutral Mixed Policies Require Asymmetric Directional Weighting
+
+H7 shows that an equal-frequency \(+c/-c\) schedule is not generally neutral. H8 asks what weighting would actually remove the long-run Gotham drift.
+
+## General two-direction rule
+
+Choose two available alignments
+
+\[
+c_-<0<c_+.
+\]
+
+Recall the asymptotic drift function
+
+\[
+h(c)
+=
+2c z_\infty(c).
+\]
+
+Because \(h(c_-)<0<h(c_+)\), a mixed policy can balance the two directions.
+
+The relevant asymptotic weighting is a **harmonic-time share** because H7 showed that alignment contributions enter through \(1/n\). If the positive direction receives limiting harmonic-time share \(p_+\), asymptotic neutrality requires
+
+\[
+p_+h(c_+)
++
+(1-p_+)h(c_-)
+=
+0.
+\]
+
+Solving gives
+
+\[
+\boxed{
+p_+^*
+=
+\frac{
+-h(c_-)
+}{
+h(c_+)-h(c_-)
+}
+}
+\]
+
+and
+
+\[
+\boxed{
+p_-^*
+=
+1-p_+^*.
+}
+\]
+
+For well-distributed periodic or stationary schedules, the harmonic-time share equals the ordinary long-run frequency. For arbitrarily block-structured schedules, raw frequency alone is not sufficient; the harmonic weighting remains the relevant criterion.
+
+## Symmetric magnitudes
+
+For the symmetric pair
+
+\[
+c_-=-c,
+\qquad
+c_+=c,
+\qquad
+c>0,
+\]
+
+let
+
+\[
+a_\infty
+=
+\frac{
+\tau(G-1)
+}{
+G(1-\tau)
+}
+\]
+
+and
+
+\[
+s
+=
+\sqrt{
+c^2+a_\infty
+}.
+\]
+
+Using the H7 drift identities,
+
+\[
+h(c)
+=
+\frac{
+2c(c+s)
+}{
+a_\infty
+}
+\]
+
+and
+
+\[
+h(-c)
+=
+-\frac{
+2c(s-c)
+}{
+a_\infty
+}.
+\]
+
+Therefore
+
+\[
+\boxed{
+p_+^*
+=
+\frac{
+s-c
+}{
+2s
+}
+=
+\frac12
+-
+\frac{
+c
+}{
+2\sqrt{c^2+a_\infty}
+}
+}
+\]
+
+and
+
+\[
+\boxed{
+p_-^*
+=
+\frac{
+s+c
+}{
+2s
+}
+=
+\frac12
++
+\frac{
+c
+}{
+2\sqrt{c^2+a_\infty}
+}
+}.
+\]
+
+Thus, for every \(c>0\),
+
+\[
+p_+^*<\frac12<p_-^*.
+\]
+
+A neutral policy must use the opposing direction more often than the reinforcing direction.
+
+For the canonical \(G=3,\tau=0.80\) example:
+
+```{r h8-asymptotic-weight-table}
+knitr::kable(
+  h8_asymptotic_weights,
+  digits = 6,
+  row.names = FALSE
+)
+```
+
+The residual weighted drift is numerical zero.
+
+The directional imbalance becomes stronger as the available magnitude \(c\) grows because reinforcing moves have greater structural leverage.
+
+## Exact finite-\(n\) log-neutral mixture
+
+The asymptotic share is not the only possible neutrality rule. H6 gives the exact one-step multiplier
+
+\[
+m_n(c)
+=
+\frac{
+A_{n+1}
+}{
+A_n
+}.
+\]
+
+Suppose that at group size \(n\) a stochastic policy chooses \(c_+\) with probability \(p_n\) and \(c_-\) otherwise. Requiring the expected one-step change in \(\log A_n\) to equal zero gives
+
+\[
+p_n\log m_n(c_+)
++
+(1-p_n)\log m_n(c_-)
+=
+0.
+\]
+
+Therefore the exact finite-\(n\) log-neutral probability is
+
+\[
+\boxed{
+p_n^+
+=
+\frac{
+-\log m_n(c_-)
+}{
+\log m_n(c_+)-\log m_n(c_-)
+}
+}.
+\]
+
+As \(n\rightarrow\infty\),
+
+\[
+p_n^+
+\longrightarrow
+p_+^*.
+\]
+
+For the symmetric \(\pm0.5\) policy:
+
+```{r h8-finite-n-table}
+knitr::kable(
+  h8_finite_n_weights,
+  digits = 6,
+  row.names = FALSE
+)
+```
+
+This provides an exact adaptive mixed policy if neutrality is defined on the log scale.
+
+## Deterministic finite-horizon controller
+
+A deterministic analogue can use the same exact multipliers. At each step, compare the two allowable moves and choose whichever makes the cumulative
+
+\[
+\log\left(
+\frac{
+A_n
+}{
+A_{\mathrm{start}}
+}
+\right)
+\]
+
+closest to zero.
+
+This controller is not needed for the asymptotic proof, but it makes the neutrality principle concrete.
+
+Over 5,000 threshold-hugging steps:
+
+```{r h8-greedy-controller-table}
+knitr::kable(
+  h8_greedy_results,
+  digits = 6,
+  row.names = FALSE
+)
+```
+
+The realized positive-direction frequencies approach the asymptotic weights, while the final group-offset SS remains extremely close to its starting value.
+
+For the \(\pm0.5\) controller, a 100-step schedule generated from the exact recurrence was also passed back through `gotham_sequence()`. The maximum relative discrepancy in group-offset SS is:
+
+```{r h8-package-controller-error}
+h8_controller_max_relative_error
+```
+
+## Interpretation
+
+H8 turns the qualitative asymmetry of H7 into an explicit control law.
+
+For symmetric directions, a policy that uses reinforcement and opposition equally is structurally biased toward expansion. To remove that bias, the process must intentionally favor opposing moves.
+
+The stronger the available directional magnitude, the more asymmetric the neutral weighting becomes.
+
+This gives a precise Gotham distinction among:
+
+- **directional balance:** equal positive and negative alignment frequency;
+- **asymptotic structural balance:** zero harmonic-time nonlinear drift;
+- **finite-\(n\) log balance:** zero expected one-step change in \(\log A_n\);
+- **deterministic finite-horizon balance:** actively choosing directions to keep cumulative log geometry near its initial value.
+
+These are not equivalent notions.
+
+**Status:** H8 is derived exactly from H6 and H7. The asymptotic weighting rule and finite-\(n\) log-neutral rule are analytic; the deterministic controller is a constructive illustration using the exact recurrence.
+
+# H9. The Exact One-Step Structurally Neutral Alignment Is Slightly Opposing
+
+H3 showed that orthogonal alignment \(c=0\) is not structurally neutral: the positive quadratic term in the update increases \(A_n\). H9 asks whether there is a single centered alignment that leaves the group-offset geometry exactly unchanged at each threshold-hugging step.
+
+The H6 recurrence is
+
+\[
+A_{n+1}
+=
+A_n
+\left[
+1+
+\frac{
+2cz_n(c)
+}{
+n+1
+}
++
+\frac{
+z_n(c)^2
+}{
+(n+1)^2
+}
+\right].
+\]
+
+Exact one-step structural neutrality requires
+
+\[
+A_{n+1}=A_n.
+\]
+
+Because the frontier radius is positive, this reduces to
+
+\[
+\frac{
+2cz_n
+}{
+n+1
+}
++
+\frac{
+z_n^2
+}{
+(n+1)^2
+}
+=
+0,
+\]
+
+hence
+
+\[
+\boxed{
+z_n^*
+=
+-2c_n^*(n+1)
+}.
+\]
+
+Therefore an exactly neutral single direction must satisfy
+
+\[
+c_n^*<0.
+\]
+
+It must be slightly opposing, not orthogonal.
+
+## Closed-form neutral alignment
+
+The normalized frontier equation from H6 is
+
+\[
+-a_n z_n^2
++
+2cz_n
++
+\gamma_n
+=
+0,
+\]
+
+where
+
+\[
+a_n
+=
+\frac{
+\tau\{G+n(G-1)\}-1
+}{
+G(n+1)(1-\tau)
+}
+\]
+
+and
+
+\[
+\gamma_n
+=
+\frac{
+\tau(n-1)+2
+}{
+\tau(n-1)+1
+}.
+\]
+
+Substitute
+
+\[
+z_n=-2c(n+1)
+\]
+
+into the frontier equation. After simplification,
+
+\[
+\gamma_n
+=
+4c^2(n+1)
+\left[
+a_n(n+1)+1
+\right].
+\]
+
+Therefore the unique negative neutral alignment is
+
+\[
+\boxed{
+c_n^*
+=
+-\frac12
+\sqrt{
+\frac{
+G(1-\tau)\{\tau(n-1)+2\}
+}{
+(n+1)(G-1)(1+n\tau)\{\tau(n-1)+1\}
+}
+}
+}.
+\]
+
+The associated normalized frontier radius is
+
+\[
+\boxed{
+z_n^*
+=
+\sqrt{
+\frac{
+G(1-\tau)(n+1)\{\tau(n-1)+2\}
+}{
+(G-1)(1+n\tau)\{\tau(n-1)+1\}
+}
+}
+}.
+\]
+
+This provides an exact deterministic rule that leaves the between-group geometry \(A_n\) unchanged after every update while still ending each step on the ICC frontier.
+
+## Asymptotic behavior
+
+Define the orthogonal limiting normalized radius from H6,
+
+\[
+z_\infty(0)
+=
+\sqrt{
+\frac{
+G(1-\tau)
+}{
+\tau(G-1)
+}
+}.
+\]
+
+Then
+
+\[
+\boxed{
+c_n^*
+=
+-\frac{
+z_\infty(0)
+}{
+2n
+}
++
+O(n^{-2})
+}
+\]
+
+and
+
+\[
+\boxed{
+z_n^*
+\longrightarrow
+z_\infty(0).
+}
+\]
+
+So the exact finite-\(n\) neutral direction approaches orthogonality from the opposing side at rate \(1/n\).
+
+This resolves the main finite-horizon question behind H4: the structurally neutral direction is not merely somewhere between a negative alignment and zero. It is available in closed form, is always slightly negative in the present regime, and converges to zero.
+
+For the canonical \(G=3,\tau=0.80\) example:
+
+```{r h9-neutral-grid-table}
+knitr::kable(
+  h9_neutral_grid,
+  digits = 8,
+  row.names = FALSE
+)
+```
+
+The table shows both the exact neutral alignment and the convergence of \(n c_n^*\) and \(z_n^*\) to their asymptotic limits.
+
+## Direct package verification
+
+Starting from the canonical threshold state, `gotham_sequence()` was run for 200 steps using the exact step-specific neutral alignment \(c_n^*\).
+
+Selected steps are:
+
+```{r h9-sequence-table}
+knitr::kable(
+  h9_sequence_table,
+  digits = 10,
+  row.names = FALSE
+)
+```
+
+The largest relative deviation of group-offset SS from its initial value across all 200 updates is:
+
+```{r h9-A-drift}
+h9_max_relative_A_drift
+```
+
+The largest discrepancy between observed normalized radius and the closed-form \(z_n^*\) is:
+
+```{r h9-z-error}
+h9_max_z_error
+```
+
+The largest post-update ICC discrepancy from \(\tau\) is:
+
+```{r h9-icc-error}
+h9_max_icc_error
+```
+
+All three should be at numerical tolerance.
+
+## Interpretation
+
+H9 gives a third notion of Gotham neutrality:
+
+- H8 provides **mixed-policy neutrality**, achieved by asymmetrically weighting different directions;
+- H9 provides **single-step deterministic neutrality**, achieved by choosing one slightly opposing alignment at each group size.
+
+These are distinct control strategies that solve the same structural objective.
+
+The result also explains why \(c=0\) was close to, but not exactly, neutral in the finite-horizon plots. Orthogonality removes the first-order directional cross-product, but the quadratic frontier term still increases group separation. A small opposing component is required to cancel that increase exactly.
+
+As \(n\) grows, the required correction becomes smaller, which is why the asymptotic critical alignment from H6 is exactly zero.
+
+**Status:** H9 is derived exactly from the H6 recurrence. The closed-form neutral alignment and normalized radius are verified directly against `gotham_sequence()`.
+
+# Additional Plot Features Worth Following
+
+The current plots suggest several secondary questions:
+
+- **Strong asymmetry:** reinforcement produces far more expansion than equal-magnitude opposition produces contraction. The positive quadratic term in the group-offset update is a likely source of this asymmetry.
+- **Smooth ordering:** the trajectories are smoothly ordered by alignment with no visible crossing in the current grid.
+- **Transient behavior:** some mildly positive alignments first reduce the frontier radius and later increase it, suggesting finite-group-size dynamics before a possible long-run regime dominates.
+- **Path-independent headroom:** despite enormous differences in `group_offset_ss` and `ss_within`, the zero-radius ICC is numerically identical across alignments at a common step.
+
+These are observations from the current canonical example, not general results.
+
+# Recommended Investigation Order
+
+1. **H1 complete:** retain the exact zero-radius headroom identity.
+2. **H2 complete:** retain the unique-positive-root sufficient condition and its threshold-hugging corollary.
+3. **H6 complete:** retain the exact normalized recurrence and its fixed-alignment asymptotic regimes.
+4. **H7 complete:** retain the variable-alignment cumulative-drift criterion and the result that symmetric \(+c/-c\) alignment is generically expansive.
+5. **H8 complete:** retain the asymmetric neutral-weighting rule, finite-\(n\) log-neutral mixture, and deterministic mixed controller.
+6. **H9 complete:** retain the exact per-step structurally neutral alignment and its direct package verification at numerical tolerance.
+7. Reframe **H4** as resolved by H9 and **H5** as a finite-horizon comparison rather than a second asymptotic critical boundary.
+8. Next decide whether stochastic alignment distributions or a broader structural criterion beyond ICC is the more informative extension.
+
+The deterministic centered threshold-hugging model is now largely reducible to exact low-dimensional recurrences and control rules. Future simulation should target questions not already settled analytically.

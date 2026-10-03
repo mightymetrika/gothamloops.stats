@@ -4,3 +4,5 @@
 ^\.claude$
 ^LICENSE\.md$
 ^PROJECT_HANDOFF\.txt$
+^data-raw$
+^report$
