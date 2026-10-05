@@ -1,8 +1,8 @@
 gothamloops.stats PROJECT HANDOFF
 ================================
-Updated: 2026-10-02
-Handoff version: v2
-Purpose: end-of-day checkpoint after deriving and verifying the deterministic centered threshold-hugging Gotham geometry through H9, including scale-free recurrences, variable-alignment drift, neutral mixed policies, and the exact per-step structurally neutral direction.
+Updated: 2026-10-05
+Handoff version: v4
+Purpose: checkpoint after extending the Gotham threshold-hugging framework through H11, including the H4/H5 reframing, IID stochastic alignment theory, strict-convexity results, and stationary-dependent alignment processes.
 
 PROJECT
 -------
@@ -223,7 +223,7 @@ Latest user-reported R CMD check on 2026-10-02:
 
 Duration reported:
 
-  52.4s
+  52.1s
 
 Report-only work after that check did not alter package R/ code.
 
@@ -307,7 +307,7 @@ This numerical work motivated H1-H6 but is no longer the main source of evidence
 
 HYPOTHESIS / RESULT REGISTRY
 ----------------------------
-The research notebook now contains H1-H9.
+The research notebook now contains H1-H11.
 
 H1. ZERO-RADIUS HEADROOM IS PATH-INVARIANT
 ------------------------------------------
@@ -386,32 +386,57 @@ for r > 0.
 Thus orthogonal proposals eliminate the linear cross-product term but not the positive quadratic contribution.
 
 
-H4. STRUCTURAL CONTRACTION / EXPANSION BOUNDARY
------------------------------------------------
+H4. STRUCTURAL NEUTRALITY: THREE DISTINCT SCALES
+------------------------------------------------
 Original 50-step numerical observation:
-  the finite-horizon endpoint crossing for A lay between c = -0.25 and c = 0.
+  the finite-horizon fixed-alignment endpoint crossing for A lay between c = -0.25 and c = 0.
 
-Resolved by H9:
-  at each finite group size there is an exact one-step structurally neutral alignment c_n* < 0.
+Current interpretation:
+  distinguish three different objects:
 
-Moreover:
+  1. one-step structural neutrality:
+       the exact step-specific c_n* from H9, with c_n* < 0;
+
+  2. finite-horizon fixed-alignment neutrality:
+       a constant c_{A,T} satisfying A_T(c_{A,T}) = A_0;
+
+  3. asymptotic fixed-alignment contraction/expansion boundary:
+       c = 0 from H6.
+
+H9 gives:
 
   c_n* -> 0 from below at rate 1/n.
 
-Thus the asymptotic critical alignment is c = 0, while exact finite-n neutrality requires a small opposing component.
+Thus the original 50-step bracket is a cumulative finite-horizon quantity. It is not the exact one-step neutral alignment. The asymptotic fixed-alignment boundary is exactly c = 0.
 
 
-H5. RADIUS NEUTRALITY VERSUS STRUCTURAL NEUTRALITY
----------------------------------------------------
+H5. RADIUS VERSUS STRUCTURAL NEUTRALITY
+---------------------------------------
 Original 50-step observation:
   the final/initial radius crossing appeared between c = 0 and c = 0.25, whereas the A crossing appeared between -0.25 and 0.
 
-Current interpretation:
-  these are finite-horizon comparisons against the starting scale, not evidence for two distinct asymptotic critical alignments.
+Exact finite-horizon relationship from H6:
 
-H6 shows that the asymptotic qualitative boundary for both radius and A is c = 0.
+  r_n = z_n(c) sqrt(A_n)
 
-Keep the finite-horizon distinction as a useful transient phenomenon, but do not describe H5 as a second asymptotic neutrality boundary.
+so:
+
+  r_n / r_n0
+    = [z_n(c) / z_n0(c)] *
+      sqrt(A_n / A_n0)
+
+Therefore radius neutrality and structural neutrality need not coincide at a finite horizon because z_n(c) changes with group size.
+
+H9 gives a direct example:
+  its exact step-specific neutral policy keeps A constant while r_n still changes through z_n*.
+
+Asymptotically, z_n(c) approaches a finite positive limit. H6 therefore gives the same qualitative fixed-alignment boundary for both A and r:
+
+  c < 0  => contraction to 0
+  c = 0  => finite positive limit
+  c > 0  => divergence to infinity
+
+Keep H5 as a mathematically explained finite-horizon/transient distinction. Do NOT describe it as evidence for two different asymptotic critical alignments.
 
 
 H6. SCALE-FREE NORMALIZED RECURRENCE
@@ -665,6 +690,153 @@ Interpretation:
   orthogonality is the asymptotic neutral direction, but exact finite-n structural neutrality requires a small opposing correction.
 
 
+H10. IID STOCHASTIC GOTHAM DRIFT IS GOVERNED BY E[h(C)], NOT E[C]
+-------------------------------------------------------------------
+Status:
+  exact IID almost-sure drift theorem derived and numerically supported
+
+Let C_n be IID alignments in [-1, 1].
+
+Using the H6 recurrence, define:
+
+  h(c) = 2 c z_infinity(c)
+
+Then:
+
+  log A_N
+    = log A_start + sum_n h(C_n)/n + O(1)
+
+If:
+
+  mu_h = E[h(C)]
+
+then:
+
+  log A_N - mu_h log N
+    -> finite random limit almost surely
+
+and equivalently:
+
+  A_N / N^(mu_h)
+    -> K in (0, infinity) almost surely
+
+Thus:
+
+  mu_h < 0  => A_N -> 0 almost surely
+  mu_h = 0  => A_N -> finite positive random limit almost surely
+  mu_h > 0  => A_N -> infinity almost surely
+
+Key new convexity result:
+
+  h''(c) > 0 on (-1, 1)
+
+Therefore:
+
+  E[h(C)] >= h(E[C])
+
+with strict inequality for a non-degenerate alignment distribution.
+
+Important consequence:
+
+  E[C] = 0 and Var(C) > 0
+    => E[h(C)] > 0
+
+So every non-degenerate mean-zero IID alignment distribution is asymptotically expansive in the current regime.
+
+Numerical same-mean comparison:
+  three IID distributions were constructed with identical E[C] = -0.10.
+
+  narrow negative:
+    E[h(C)] = -0.113501
+    finite expected exponent = -0.102299
+    empirical mean exponent = -0.102234
+    median final A ratio = 0.482724
+    P(final expansion) = 0
+
+  moderate mixed:
+    E[h(C)] = 0.059413
+    finite expected exponent = 0.063160
+    empirical mean exponent = 0.064709
+    median final A ratio = 1.538599
+    P(final expansion) = 0.9325
+
+  wide mixed:
+    E[h(C)] = 0.606386
+    finite expected exponent = 0.577179
+    empirical mean exponent = 0.573650
+    median final A ratio = 60.340010
+    P(final expansion) = 1
+
+Thus ordinary mean alignment alone does not determine the Gotham regime.
+
+IID stochastic-neutral example on support +/- 0.5:
+  ordinary mean alignment = -0.146385
+  E[h(C)] = 0
+  finite expected exponent = 0.003208
+  empirical mean exponent = 0.002229
+  median final A ratio = 1.019764
+  P(final expansion) = 0.515
+
+This is consistent with convergence to a non-degenerate positive random limit rather than systematic polynomial growth or decay.
+
+
+H11. STATIONARY DEPENDENCE PRESERVES FIRST-ORDER DRIFT BUT CHANGES FLUCTUATIONS
+-------------------------------------------------------------------------------
+Status:
+  stationary-ergodic first-order exponent derived and Markov illustration verified
+
+Let C_n be stationary and ergodic and define:
+
+  H_n = h(C_n)
+  mu_h = E[H_n]
+
+Then summation by parts combined with the ergodic theorem gives:
+
+  log A_N / log N
+    -> mu_h almost surely
+
+Thus the first-order polynomial exponent depends on the stationary marginal through E[h(C)] and not on autocorrelation by itself.
+
+For mu_h != 0:
+  the contraction-versus-expansion classification is unchanged by dependence.
+
+For mu_h = 0:
+  stationarity and ergodicity alone imply only sub-logarithmic growth of log A_N.
+  Stronger short-range dependence / mixing conditions are needed to recover an IID-like finite random limit.
+
+Controlled two-state Markov illustration:
+  support = {-0.5, +0.5}
+  stationary positive share = 0.40
+  E[C] = -0.10
+  E[h(C)] = 0.059413
+  finite expected exponent = 0.063160
+
+Changing only the persistence parameter rho:
+
+  rho = -0.5:
+    empirical mean exponent = 0.065671
+    empirical SD exponent = 0.027851
+    SD final log A ratio = 0.198628
+
+  rho = 0:
+    empirical mean exponent = 0.059097
+    empirical SD exponent = 0.045517
+    SD final log A ratio = 0.324616
+
+  rho = 0.8:
+    empirical mean exponent = 0.066635
+    empirical SD exponent = 0.120603
+    SD final log A ratio = 0.860105
+
+The first-order exponent remains anchored to the common marginal drift, while stronger positive persistence greatly increases finite-sample dispersion.
+
+Current stochastic takeaway:
+  - marginal nonlinear drift E[h(C)] governs first-order growth;
+  - ordinary mean alignment E[C] can be misleading;
+  - dependence mainly enters through fluctuation behavior and the neutral boundary;
+  - the mu_h = 0 dependent case is the natural next stochastic-theory target if this branch is continued.
+
+
 CURRENT SCIENTIFIC TAKEAWAY
 ---------------------------
 The original empirical finding was that the same ICC threshold permits radically different observation-space heterogeneity depending on alignment.
@@ -677,9 +849,12 @@ The stronger result now is that the deterministic centered threshold-hugging mod
   4. fixed alignment yields explicit contraction / finite-limit / expansion regimes;
   5. mean-zero directional balance is not structural balance;
   6. neutral mixed policies require asymmetric directional weighting;
-  7. exact finite-n single-step neutrality is available in closed form and is slightly opposing.
+  7. exact finite-n single-step neutrality is available in closed form and is slightly opposing;
+  8. IID stochastic growth is classified by E[h(C)], not E[C];
+  9. strict convexity implies every non-degenerate mean-zero IID alignment distribution is expansive;
+  10. stationary dependence preserves the first-order exponent but changes finite-sample fluctuation behavior.
 
-The deterministic centered ICC version is therefore now much closer to a small constrained dynamical/control system than to a brute-force simulation exercise.
+The centered ICC version is therefore now an analytically tractable constrained dynamical/control system with a natural stochastic extension, rather than a brute-force simulation exercise.
 
 
 IMPORTANT TERMINOLOGY / INTERPRETATION CAUTIONS
@@ -704,38 +879,47 @@ IMPORTANT TERMINOLOGY / INTERPRETATION CAUTIONS
 
 10. H8 mixed-policy neutrality and H9 single-step deterministic neutrality are different control strategies.
 
+11. In the stochastic branch, E[C] is not the governing long-run quantity; use E[h(C)].
+
+12. H11's stationary-ergodic result identifies the first-order exponent. At E[h(C)] = 0, stronger dependence assumptions are needed before claiming convergence to a finite positive random limit.
+
 
 NEXT SCIENTIFIC DECISION
 ------------------------
-Do NOT extend the fixed-alignment brute-force run from 50 to 500 merely for its own sake. H1, H2, H6, H7, H8, and H9 have analytically settled the main deterministic questions that motivated the longer-run exploration.
+Do NOT add more arbitrary fixed-alignment or IID simulations merely for their own sake. The deterministic structure through H9 and the first stochastic layer through H11 are now analytically characterized.
 
-At the next session, choose one of two scientifically meaningful extensions:
+At the next session, choose one of two scientifically meaningful directions:
 
-A. STOCHASTIC ALIGNMENT PROCESSES
+A. DEEPEN THE STOCHASTIC BRANCH AT THE NEUTRAL BOUNDARY
 
-Study c_n as a random process or draw from a distribution.
+Focus on:
+
+  E[h(C)] = 0
+
+under dependent alignment processes.
+
 Questions:
-  - Under what distributional conditions is the expected nonlinear drift negative, zero, or positive?
-  - How do ordinary mean alignment and E[h(c)] differ?
-  - What is the role of dependence/autocorrelation in c_n?
-  - Can a martingale or stochastic-approximation formulation characterize neutral policies?
-  - What finite-sample variability surrounds the deterministic asymptotic drift?
+  - Under what explicit mixing / short-range-dependence conditions does the centered harmonic series converge?
+  - What is the variance of the random limiting multiplicative factor?
+  - Can a martingale approximation or CLT characterize finite-sample fluctuations?
+  - How does persistence change the distribution of the limiting or near-neutral geometry?
+  - Which stochastic-neutral policies remain robust under dependence misspecification?
 
-This is the closest continuation of H7-H9.
+This is the closest continuation of H10-H11.
 
 B. BROADER STRUCTURAL CRITERIA
 
 Ask whether the Gotham geometry survives when ICC is replaced or supplemented by another grouping/structure criterion.
+
 Possible later candidates:
-  - alternative reliability/variance-component measures
+  - alternative reliability / variance-component measures
   - cluster separation summaries
   - multilevel-model criteria
   - multiple structural constraints
 
 Do not broaden until the desired scientific question is explicit.
 
-A smaller cleanup task before either extension:
-  update the H4/H5 prose in the hypothesis notebook so the older exploratory wording is fully reconciled with H6/H9.
+The H4/H5 wording cleanup is complete.
 
 
 LATER SIMULATION PROGRAM
@@ -777,22 +961,19 @@ Do not divert into these spatial branches until the statistical framework's next
 
 GIT / CHECKPOINT STATUS
 -----------------------
-Last previously confirmed pushed checkpoint before the current report/analysis work:
+Last confirmed pushed checkpoint before the H4/H5 + stochastic-alignment work:
 
-  2c79bb7  Build initial ANOVA Gotham framework
+  8e1eb7b  Develop sequential Gotham geometry and neutral control rules
 
-The end-of-day commit should include, at minimum, the current modified tracked files plus:
+At that checkpoint:
 
-  PROJECT_HANDOFF.txt
-  data-raw/sequence_grid_exploration.R
-  report/gotham_sequence_hypotheses.Rmd
-  report/gotham_sequence_hypotheses.docx
+  HEAD -> main
+  origin/main -> main
+  working tree clean
 
-Actual git status is authoritative; do not assume this list is exhaustive.
+The H4/H5 reframing changes the research notebook and handoff only. After applying the patch, render report/gotham_sequence_hypotheses.Rmd so the generated DOCX matches the source before the next commit.
 
-Recommended commit message:
-
-  Develop sequential Gotham geometry and neutral control rules
+Actual git status is authoritative.
 
 
 RECOMMENDED NEXT SESSION START
@@ -822,6 +1003,7 @@ Then read:
 
   PROJECT_HANDOFF.txt
   report/gotham_sequence_hypotheses.Rmd
+  data-raw/stochastic_alignment_exploration.R
 
 before changing the model.
 
@@ -837,6 +1019,7 @@ DO NOT LOSE THESE DESIGN PRINCIPLES
 - Preserve both sides of epsilon/frontier interpretations where relevant.
 - Distinguish finite-horizon neutrality from asymptotic neutrality.
 - Distinguish raw directional balance from nonlinear structural balance.
+- In stochastic work, distinguish marginal first-order drift from dependence-driven fluctuations.
 - Prefer bounded, decision-oriented development steps.
 - Keep the package useful as a scientific research object, not merely a game implementation.
 
@@ -844,14 +1027,14 @@ DO NOT LOSE THESE DESIGN PRINCIPLES
 END OF HANDOFF
 --------------
 Current milestone:
-  deterministic centered threshold-hugging Gotham geometry characterized through H9
+  centered threshold-hugging Gotham geometry characterized through H11, including deterministic control laws, H4/H5 reconciliation, IID stochastic drift theory, and stationary-dependent first-order asymptotics
 
 Automated package baseline:
   285 tests passing
   R CMD check: 0 errors | 0 warnings | 0 notes
 
 Strongest current result:
-  the threshold-hugging process reduces to exact normalized recurrences and admits explicit neutral control laws; equal directional balance is generally not structurally neutral.
+  the threshold-hugging process reduces to exact normalized recurrences; deterministic neutrality admits explicit control laws, while stochastic first-order growth is governed by the nonlinear marginal drift E[h(C)] rather than ordinary mean alignment.
 
 Immediate next task:
-  choose between stochastic alignment processes and a broader structural criterion, after a small H4/H5 wording cleanup in the research notebook.
+  choose whether to deepen the stochastic neutral-boundary theory under dependence or broaden the structural criterion beyond ICC.

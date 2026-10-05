@@ -49,6 +49,24 @@ source(
   local = knitr::knit_global()
 )
 
+stochastic_script <- file.path(
+  project_root,
+  "data-raw",
+  "stochastic_alignment_exploration.R"
+)
+
+if (!file.exists(stochastic_script)) {
+  stop(
+    "Could not locate data-raw/stochastic_alignment_exploration.R. ",
+    "Apply the stochastic-alignment exploration harness before knitting this report."
+  )
+}
+
+source(
+  stochastic_script,
+  local = knitr::knit_global()
+)
+
 dat <- data.frame(
   group = rep(c("A", "B", "C"), each = 3),
   y = 1:9
@@ -1233,6 +1251,108 @@ radius_neutral_bracket <- find_endpoint_bracket(
   "radius_ratio"
 )
 
+h10_same_mean_distributions <- list(
+  narrow_negative = list(
+    values = c(-0.15, -0.05),
+    prob = c(0.50, 0.50)
+  ),
+  moderate_mixed = list(
+    values = c(-0.50, 0.50),
+    prob = c(0.60, 0.40)
+  ),
+  wide_mixed = list(
+    values = c(-1.00, 1.00),
+    prob = c(0.55, 0.45)
+  )
+)
+
+h10_iid_review <- run_gotham_iid_alignment_review(
+  distributions = h10_same_mean_distributions,
+  initial_n = threshold_state$group_size,
+  steps = 5000L,
+  reps = 400L,
+  g = threshold_state$n_groups,
+  tau = tau,
+  seed = 20261005L
+)
+
+h10_zero_mean_examples <- data.frame(
+  scenario = c(
+    "degenerate_zero",
+    "symmetric_pm_0_5",
+    "skewed_zero_mean"
+  ),
+  mean_alignment = c(
+    0,
+    0,
+    0
+  ),
+  asymptotic_drift = c(
+    gotham_asymptotic_drift(
+      g = state$n_groups,
+      tau = tau,
+      alignment = 0
+    ),
+    mean(
+      gotham_asymptotic_drift(
+        g = state$n_groups,
+        tau = tau,
+        alignment = c(-0.5, 0.5)
+      )
+    ),
+    sum(
+      c(1 / 3, 2 / 3) *
+        gotham_asymptotic_drift(
+          g = state$n_groups,
+          tau = tau,
+          alignment = c(-1, 0.5)
+        )
+    )
+  ),
+  stringsAsFactors = FALSE
+)
+
+h10_neutral_positive_share <-
+  neutral_positive_share_asymptotic(
+    g = state$n_groups,
+    tau = tau,
+    negative_alignment = -0.5,
+    positive_alignment = 0.5
+  )
+
+h10_neutral_distribution <- list(
+  neutral_pm_0_5 = list(
+    values = c(-0.5, 0.5),
+    prob = c(
+      1 - h10_neutral_positive_share,
+      h10_neutral_positive_share
+    )
+  )
+)
+
+h10_neutral_review <- run_gotham_iid_alignment_review(
+  distributions = h10_neutral_distribution,
+  initial_n = threshold_state$group_size,
+  steps = 5000L,
+  reps = 400L,
+  g = threshold_state$n_groups,
+  tau = tau,
+  seed = 20261007L
+)
+
+h11_markov_review <- run_gotham_markov_alignment_review(
+  negative_alignment = -0.5,
+  positive_alignment = 0.5,
+  stationary_positive_share = 0.4,
+  rho = c(-0.5, 0, 0.8),
+  initial_n = threshold_state$group_size,
+  steps = 5000L,
+  reps = 400L,
+  g = threshold_state$n_groups,
+  tau = tau,
+  seed = 20261006L
+)
+
 hypotheses <- data.frame(
   ID = c(
     "H1",
@@ -1243,29 +1363,35 @@ hypotheses <- data.frame(
     "H6",
     "H7",
     "H8",
-    "H9"
+    "H9",
+    "H10",
+    "H11"
   ),
   Candidate = c(
     "Zero-radius headroom is path-invariant",
     "Threshold-hugging centered rays have one positive frontier crossing under a simple sufficient condition",
     "Orthogonality is not structural neutrality",
-    "A critical fixed alignment separates contraction from expansion of between-group geometry",
-    "The critical alignment for frontier-radius growth differs from the critical alignment for group-separation growth",
+    "Structural neutrality is finite-n opposing and asymptotically orthogonal",
+    "Radius and structural neutrality can differ at finite horizons but share the same asymptotic fixed-alignment boundary",
     "Threshold-state dynamics admit a scale-free normalized recurrence",
     "Mean-zero variable alignment is not generally Gotham-neutral",
     "Gotham-neutral mixed policies require asymmetric directional weighting",
-    "The exact one-step structurally neutral alignment is slightly opposing"
+    "The exact one-step structurally neutral alignment is slightly opposing",
+    "IID stochastic Gotham drift is governed by E[h(C)], not E[C]",
+    "Stationary dependence preserves the first-order drift exponent but changes fluctuations"
   ),
   Current_status = c(
     "Exact identity derived and numerically verified",
     "Exact sufficient condition derived and numerically verified",
     "Exact consequence of the update identity",
-    "H9 gives exact per-step neutral alignment c_n* < 0 with c_n* -> 0",
-    "Finite-horizon distinction retained; H6 predicts common asymptotic boundary c = 0",
+    "Reframed from H6/H9: exact one-step c_n* < 0; asymptotic fixed-alignment boundary c = 0",
+    "Reframed: finite-horizon endpoint distinction is exact; no second asymptotic boundary",
     "Exact normalized recurrence derived and numerically verified",
     "Exact cumulative-drift criterion derived; symmetric alternation expands",
     "Exact asymptotic weighting rule and finite-n log-neutral policy derived and verified",
-    "Exact neutral alignment and radius derived; package verification added"
+    "Exact neutral alignment and radius derived; package verification added",
+    "IID almost-sure drift theorem derived; convexity corollary and simulations added",
+    "Stationary-ergodic first-order result derived; Markov dependence simulation added"
   ),
   stringsAsFactors = FALSE
 )
@@ -1843,11 +1969,13 @@ knitr::kable(
 
 **Status:** Exact consequence of the update identity. This is conceptually important because "orthogonal" and "neutral" should not be used interchangeably.
 
-# H4. A Critical Alignment Separates Structural Contraction and Expansion
+# H4. Structural Neutrality Is Slightly Opposing at Finite n and Orthogonal Asymptotically
 
-The endpoint plot shows monotone ordering by alignment. Negative alignment contracts between-group geometry strongly; positive alignment expands it strongly.
+## Original finite-horizon observation
 
-On the current coarse alignment grid, the 50-step value where final group-offset SS changes from below to above its initial value is bracketed by:
+The 50-step endpoint plot showed monotone ordering by fixed alignment. Negative alignment contracted between-group geometry strongly, whereas positive alignment expanded it strongly.
+
+On the coarse alignment grid, the fixed alignment for which final group-offset SS changed from below to above its initial value was bracketed by:
 
 ```{r offset-bracket}
 offset_neutral_bracket
@@ -1855,26 +1983,92 @@ offset_neutral_bracket
 
 This bracket lies between -0.25 and 0 in the present run.
 
-**Hypothesis:** For fixed \(G\), \(\tau\), and starting group size, there is a critical fixed alignment \(c_A\) separating long-run contraction from expansion of \(A_t=\|\mathbf{a}_t\|^2\).
+The important clarification is that this quantity is a **finite-horizon fixed-alignment endpoint crossing**. It asks for a constant alignment \(c\) such that, after the chosen number of updates,
 
-Important open questions:
+\[
+\frac{A_T(c)}{A_0}=1.
+\]
 
-- Does \(c_A\) depend on step or approach a limiting value?
-- Does the critical value approach 0 from below as group size grows?
-- Is the trajectory monotone in alignment for all steps?
-- Can the critical alignment be obtained from a normalized recurrence rather than simulation?
+It is not the same object as the exact one-step neutral alignment at a particular group size.
 
-# H5. Radius Neutrality and Structural Neutrality Are Different
+## Reframing from H6 and H9
 
-The relative frontier-radius plot shows a second transition. At 50 steps, the alignment where the final frontier radius changes from below to above its step-1 radius is bracketed by:
+H6 resolves the long-run fixed-alignment question. For any fixed \(c\),
+
+\[
+c<0
+\Rightarrow
+A_n\rightarrow0,
+\]
+
+\[
+c=0
+\Rightarrow
+A_n\rightarrow A_\infty
+\quad\text{for some finite positive }A_\infty,
+\]
+
+and
+
+\[
+c>0
+\Rightarrow
+A_n\rightarrow\infty.
+\]
+
+Thus the **asymptotic fixed-alignment contraction/expansion boundary is exactly**
+
+\[
+\boxed{c=0}.
+\]
+
+H9 resolves a different, local question. At each finite group size there is an exact one-step structurally neutral alignment
+
+\[
+c_n^*<0
+\]
+
+that satisfies
+
+\[
+A_{n+1}=A_n.
+\]
+
+Moreover,
+
+\[
+c_n^*
+=
+-\frac{z_\infty(0)}{2n}
++
+O(n^{-2}),
+\]
+
+so the exact one-step neutral direction approaches orthogonality from the opposing side.
+
+The original H4 observation therefore contains three related but distinct objects:
+
+1. **one-step structural neutrality:** the step-specific \(c_n^*\) from H9;
+2. **finite-horizon fixed-alignment neutrality:** a constant \(c_{A,T}\) satisfying \(A_T(c_{A,T})=A_0\);
+3. **asymptotic fixed-alignment boundary:** \(c=0\), from H6.
+
+The original 50-step grid estimated the second object. H9 gives the first exactly, while H6 gives the third exactly.
+
+**Status:** The original H4 hypothesis is no longer an unresolved asymptotic question. Its finite-\(n\), finite-horizon, and asymptotic meanings should be kept separate.
+
+# H5. Radius and Structural Neutrality Differ at Finite Horizons, Not Asymptotically
+
+## Original finite-horizon observation
+
+The relative frontier-radius plot showed a second endpoint transition. At 50 steps, the fixed alignment where the final frontier radius changed from below to above its step-1 radius was bracketed by:
 
 ```{r radius-bracket}
 radius_neutral_bracket
 ```
 
-In the present grid this is between 0 and 0.25, whereas the structural group-offset transition is between -0.25 and 0.
+In the present grid this lies between 0 and 0.25, whereas the 50-step group-offset SS crossing lies between -0.25 and 0.
 
-The \(c=0.25\) trajectory is especially interesting because the frontier radius initially falls and later grows beyond its step-1 value.
+The \(c=0.25\) trajectory remains a useful transient example because the frontier radius initially falls and later grows beyond its step-1 value.
 
 ```{r radius-transition-table}
 knitr::kable(
@@ -1895,12 +2089,113 @@ knitr::kable(
 )
 ```
 
-**Hypothesis:** There are at least two distinct notions of a Gotham "neutral direction":
+## Exact finite-horizon relationship
 
-1. a direction that leaves the between-group geometry asymptotically stable; and
-2. a direction that leaves the admissible frontier radius asymptotically stable.
+H6 gives
 
-These need not coincide.
+\[
+r_n(c)
+=
+z_n(c)\sqrt{A_n}.
+\]
+
+Therefore, between two group sizes \(n_0\) and \(n\),
+
+\[
+\boxed{
+\frac{r_n(c)}{r_{n_0}(c)}
+=
+\frac{z_n(c)}{z_{n_0}(c)}
+\sqrt{
+\frac{A_n}{A_{n_0}}
+}
+}.
+\]
+
+This identity explains why finite-horizon radius neutrality and structural neutrality need not coincide.
+
+If
+
+\[
+A_n=A_{n_0},
+\]
+
+then
+
+\[
+\frac{r_n}{r_{n_0}}
+=
+\frac{z_n}{z_{n_0}},
+\]
+
+which is not generally 1 at finite \(n\). Conversely, if
+
+\[
+r_n=r_{n_0},
+\]
+
+then
+
+\[
+\frac{A_n}{A_{n_0}}
+=
+\left(
+\frac{z_{n_0}}{z_n}
+\right)^2,
+\]
+
+which is not generally 1.
+
+H9 gives an especially direct example. Under the exact step-specific structurally neutral policy, \(A_n\) is constant by construction, while
+
+\[
+r_n
+=
+z_n^*\sqrt{A}
+\]
+
+still changes as \(z_n^*\) converges toward \(z_\infty(0)\). Exact structural neutrality therefore does not imply a constant frontier radius at finite group size.
+
+## Asymptotic reconciliation
+
+For fixed alignment, H6 shows that
+
+\[
+z_n(c)\rightarrow z_\infty(c),
+\]
+
+where \(z_\infty(c)\) is finite and strictly positive in the current regime. The long-run qualitative behavior of \(r_n\) therefore follows the same fixed-alignment boundary as \(A_n\):
+
+\[
+c<0
+\Rightarrow
+r_n\rightarrow0,
+\]
+
+\[
+c=0
+\Rightarrow
+r_n\rightarrow r_\infty
+\quad\text{for some finite positive }r_\infty,
+\]
+
+and
+
+\[
+c>0
+\Rightarrow
+r_n\rightarrow\infty.
+\]
+
+Thus there is **not** a second asymptotic critical alignment for radius growth. The asymptotic fixed-alignment boundary is again
+
+\[
+\boxed{c=0}.
+\]
+
+The original H5 observation should therefore be retained as a real and mathematically explained **finite-horizon/transient distinction**, not as evidence for two different asymptotic neutral directions.
+
+**Status:** H5 is reframed. Radius neutrality and structural neutrality can differ at finite horizons because the normalized frontier factor \(z_n(c)\) evolves with group size, but their fixed-alignment asymptotic qualitative boundary is the same.
 
 # H6. Threshold-State Dynamics Admit a Scale-Free Recurrence
 
@@ -3199,6 +3494,435 @@ As \(n\) grows, the required correction becomes smaller, which is why the asympt
 
 **Status:** H9 is derived exactly from the H6 recurrence. The closed-form neutral alignment and normalized radius are verified directly against `gotham_sequence()`.
 
+
+# H10. IID Stochastic Gotham Drift Is Governed by E[h(C)], Not E[C]
+
+H7 treated deterministic variable-alignment sequences. Now let
+
+\[
+C_n
+\]
+
+be independent and identically distributed random alignments taking values in \([-1,1]\).
+
+The exact H6 recurrence remains
+
+\[
+A_{n+1}
+=
+A_n m_n(C_n).
+\]
+
+Define the limiting drift function
+
+\[
+h(c)
+=
+2c z_\infty(c).
+\]
+
+## Uniform first-order expansion
+
+Because \(c\in[-1,1]\), the normalized frontier radius converges uniformly:
+
+\[
+z_n(c)
+=
+z_\infty(c)
++
+O(n^{-1}).
+\]
+
+The exact multiplier therefore satisfies
+
+\[
+\log m_n(c)
+=
+\frac{h(c)}{n}
++
+O(n^{-2}),
+\]
+
+uniformly over the entire alignment interval.
+
+Consequently,
+
+\[
+\log A_N
+=
+\log A_{n_0}
++
+\sum_{n=n_0}^{N-1}
+\frac{h(C_n)}{n}
++
+R_N,
+\]
+
+where \(R_N\) converges absolutely to a finite random limit because the remainder is uniformly \(O(n^{-2})\).
+
+Let
+
+\[
+\mu_h
+=
+E[h(C)].
+\]
+
+Then
+
+\[
+\sum_n
+\frac{h(C_n)-\mu_h}{n}
+\]
+
+converges almost surely and in \(L^2\): the summands are independent, centered, bounded, and their variances are dominated by a constant times \(1/n^2\).
+
+Thus
+
+\[
+\boxed{
+\log A_N
+-
+\mu_h\log N
+\longrightarrow
+L
+\quad\text{almost surely}
+}
+\]
+
+for a finite random variable \(L\), up to the immaterial choice of the initial group-size index.
+
+Equivalently,
+
+\[
+\boxed{
+\frac{A_N}{N^{\mu_h}}
+\longrightarrow
+K
+\in(0,\infty)
+\quad\text{almost surely}.
+}
+\]
+
+This gives the IID stochastic classification:
+
+\[
+\mu_h<0
+\Rightarrow
+A_N\rightarrow0
+\quad\text{almost surely},
+\]
+
+\[
+\mu_h=0
+\Rightarrow
+A_N\rightarrow K
+\in(0,\infty)
+\quad\text{almost surely},
+\]
+
+and
+
+\[
+\mu_h>0
+\Rightarrow
+A_N\rightarrow\infty
+\quad\text{almost surely}.
+\]
+
+The stochastic analogue of the deterministic Gotham exponent is therefore
+
+\[
+\boxed{
+\mu_h=E[h(C)],
+}
+\]
+
+not \(E[C]\).
+
+## A stronger convexity result
+
+Write
+
+\[
+a_\infty
+=
+\frac{\tau(G-1)}{G(1-\tau)}
+\]
+
+and
+
+\[
+h(c)
+=
+\frac{
+2c\{c+\sqrt{c^2+a_\infty}\}
+}{
+a_\infty
+}.
+\]
+
+Let
+
+\[
+t
+=
+\frac{c}{\sqrt{c^2+a_\infty}},
+\qquad
+-1<t<1.
+\]
+
+Direct differentiation gives
+
+\[
+\boxed{
+h''(c)
+=
+\frac{2}{a_\infty}
+(1+t)^2(2-t)
+>0.
+}
+\]
+
+Thus \(h(c)\) is strictly convex.
+
+Jensen's inequality then gives
+
+\[
+E[h(C)]
+\ge
+h(E[C]),
+\]
+
+with strict inequality for any non-degenerate alignment distribution.
+
+In particular,
+
+\[
+\boxed{
+E[C]=0
+\ \text{and}\ 
+\operatorname{Var}(C)>0
+\quad\Longrightarrow\quad
+E[h(C)]>0.
+}
+\]
+
+So **every non-degenerate mean-zero IID alignment distribution is asymptotically expansive** in the present Gotham regime.
+
+This substantially generalizes H7, which first demonstrated the phenomenon for symmetric deterministic alternation.
+
+It also implies that any non-degenerate IID distribution satisfying
+
+\[
+E[h(C)]=0
+\]
+
+must have
+
+\[
+E[C]<0.
+\]
+
+Stochastic Gotham neutrality requires an opposing bias in ordinary alignment space.
+
+For the canonical example, several mean-zero distributions illustrate the convexity result:
+
+```{r h10-zero-mean-table}
+knitr::kable(
+  h10_zero_mean_examples,
+  digits = 6,
+  row.names = FALSE
+)
+```
+
+## Same ordinary mean, different Gotham regimes
+
+To demonstrate why \(E[C]\) is insufficient, consider three IID distributions that all have
+
+\[
+E[C]=-0.10.
+\]
+
+They differ only in how dispersed the alignment distribution is.
+
+The exact recurrence was simulated for 5,000 steps and 400 independent realizations per distribution.
+
+```{r h10-iid-table}
+knitr::kable(
+  h10_iid_review,
+  digits = 6,
+  row.names = FALSE
+)
+```
+
+The narrow negative distribution has negative \(E[h(C)]\) and contracts. The more dispersed distributions have the **same ordinary mean alignment** but positive \(E[h(C)]\), so they expand.
+
+The simulated mean log-growth exponents should closely track the exact finite-horizon expected exponent and move toward the asymptotic value \(E[h(C)]\).
+
+## IID stochastic neutrality
+
+For the symmetric support \(\{-0.5,+0.5\}\), H8 gives the asymptotically neutral positive-direction probability. Using that probability as an IID sampling rule gives \(E[h(C)]=0\).
+
+```{r h10-neutral-table}
+knitr::kable(
+  h10_neutral_review,
+  digits = 6,
+  row.names = FALSE
+)
+```
+
+The ordinary mean alignment of this neutral distribution is negative, while its Gotham drift is zero. H10 predicts convergence to a positive random finite limit rather than polynomial expansion or contraction.
+
+**Status:** H10 gives an exact IID stochastic asymptotic theorem under the current centered threshold-hugging formulation. It identifies \(E[h(C)]\) as the governing exponent and shows by strict convexity that non-degenerate mean-zero IID alignment is necessarily expansive.
+
+# H11. Dependence Preserves the First-Order Drift Exponent but Changes Fluctuations
+
+The IID assumption is stronger than necessary for the first-order exponent.
+
+Let
+
+\[
+H_n
+=
+h(C_n)
+\]
+
+and suppose \(\{C_n\}\) is stationary and ergodic with
+
+\[
+E|H_n|<\infty.
+\]
+
+Let
+
+\[
+\mu_h
+=
+E[H_n].
+\]
+
+The ergodic theorem gives
+
+\[
+S_N
+=
+\sum_{n=1}^{N}
+(H_n-\mu_h)
+=
+o(N)
+\quad\text{almost surely}.
+\]
+
+By summation by parts,
+
+\[
+\sum_{n=1}^{N}
+\frac{H_n-\mu_h}{n}
+=
+\frac{S_N}{N}
++
+\sum_{n=1}^{N-1}
+\frac{S_n}{n(n+1)}.
+\]
+
+Since \(S_n=o(n)\),
+
+\[
+\frac{1}{\log N}
+\sum_{n=1}^{N}
+\frac{H_n-\mu_h}{n}
+\longrightarrow
+0
+\quad\text{almost surely}.
+\]
+
+Combining this with the exact Gotham remainder gives
+
+\[
+\boxed{
+\frac{\log A_N}{\log N}
+\longrightarrow
+\mu_h
+=
+E[h(C)]
+\quad\text{almost surely}.
+}
+\]
+
+Therefore a stationary ergodic alignment process with a fixed marginal distribution has the same **first-order polynomial exponent** regardless of its autocorrelation structure.
+
+For
+
+\[
+\mu_h\neq0,
+\]
+
+the contraction-versus-expansion classification is unchanged by dependence.
+
+The boundary case
+
+\[
+\mu_h=0
+\]
+
+is more delicate. Under IID sampling, H10 proves that the centered harmonic series converges and \(A_N\) approaches a finite positive random limit. Stationarity and ergodicity alone only imply
+
+\[
+\log A_N=o(\log N),
+\]
+
+so stronger short-range-dependence conditions are needed to obtain the same finite-limit conclusion.
+
+## Two-state Markov illustration
+
+To isolate the role of dependence, consider the same marginal distribution in every case:
+
+\[
+C_n\in\{-0.5,+0.5\},
+\]
+
+with stationary probability
+
+\[
+P(C_n=+0.5)=0.40.
+\]
+
+Thus every process has the same
+
+\[
+E[C]=-0.10
+\]
+
+and the same positive
+
+\[
+E[h(C)].
+\]
+
+Only the lag-one persistence parameter is changed.
+
+The exact recurrence was propagated for 5,000 steps across 400 realizations for negatively correlated, IID, and positively persistent two-state chains.
+
+```{r h11-markov-table}
+knitr::kable(
+  h11_markov_review,
+  digits = 6,
+  row.names = FALSE
+)
+```
+
+The mean empirical exponent should remain close to the same finite-horizon and asymptotic predictions across all three dependence structures because the stationary marginal distribution is unchanged.
+
+What dependence changes is the **finite-sample dispersion** around that exponent. Positive persistence clusters reinforcing or opposing moves into longer runs, while negative autocorrelation alternates directions more aggressively.
+
+This separates two stochastic questions:
+
+1. **first-order structural drift:** governed by the stationary marginal value \(E[h(C)]\);
+2. **fluctuations and neutral-boundary behavior:** sensitive to dependence, autocorrelation, and mixing properties.
+
+**Status:** H11 establishes the stationary-ergodic first-order exponent and introduces dependence through a controlled two-state Markov comparison. The next stochastic step, if needed, would be to characterize the variance/random-limit behavior under explicit short-range-dependence assumptions rather than adding more arbitrary simulation.
+
 # Additional Plot Features Worth Following
 
 The current plots suggest several secondary questions:
@@ -3218,7 +3942,9 @@ These are observations from the current canonical example, not general results.
 4. **H7 complete:** retain the variable-alignment cumulative-drift criterion and the result that symmetric \(+c/-c\) alignment is generically expansive.
 5. **H8 complete:** retain the asymmetric neutral-weighting rule, finite-\(n\) log-neutral mixture, and deterministic mixed controller.
 6. **H9 complete:** retain the exact per-step structurally neutral alignment and its direct package verification at numerical tolerance.
-7. Reframe **H4** as resolved by H9 and **H5** as a finite-horizon comparison rather than a second asymptotic critical boundary.
-8. Next decide whether stochastic alignment distributions or a broader structural criterion beyond ICC is the more informative extension.
+7. **H4/H5 reconciled:** distinguish one-step, finite-horizon, and asymptotic neutrality; retain the radius/structure distinction only as a finite-horizon phenomenon.
+8. **H10 added:** derive and test IID stochastic alignment; classify long-run behavior by \(E[h(C)]\), not \(E[C]\).
+9. **H11 added:** introduce stationary dependence and isolate its effect on first-order drift versus finite-sample fluctuations.
+10. After verifying H10/H11 numerically, decide whether to deepen the stochastic theory at the neutral boundary or broaden the structural criterion beyond ICC.
 
 The deterministic centered threshold-hugging model is now largely reducible to exact low-dimensional recurrences and control rules. Future simulation should target questions not already settled analytically.
