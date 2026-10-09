@@ -1353,6 +1353,19 @@ h11_markov_review <- run_gotham_markov_alignment_review(
   seed = 20261006L
 )
 
+h12_neutral_markov_review <-
+  run_gotham_neutral_markov_boundary_review(
+    negative_alignment = -0.5,
+    positive_alignment = 0.5,
+    rho = c(-0.5, 0, 0.5, 0.8),
+    initial_n = threshold_state$group_size,
+    steps = 5000L,
+    reps = 800L,
+    g = threshold_state$n_groups,
+    tau = tau,
+    seed = 20261009L
+  )
+
 hypotheses <- data.frame(
   ID = c(
     "H1",
@@ -1365,7 +1378,8 @@ hypotheses <- data.frame(
     "H8",
     "H9",
     "H10",
-    "H11"
+    "H11",
+    "H12"
   ),
   Candidate = c(
     "Zero-radius headroom is path-invariant",
@@ -1378,7 +1392,8 @@ hypotheses <- data.frame(
     "Gotham-neutral mixed policies require asymmetric directional weighting",
     "The exact one-step structurally neutral alignment is slightly opposing",
     "IID stochastic Gotham drift is governed by E[h(C)], not E[C]",
-    "Stationary dependence preserves the first-order drift exponent but changes fluctuations"
+    "Stationary dependence preserves the first-order drift exponent but changes fluctuations",
+    "Neutral two-state Markov alignment converges to a finite random structural scale with persistence-dependent variance"
   ),
   Current_status = c(
     "Exact identity derived and numerically verified",
@@ -1391,7 +1406,8 @@ hypotheses <- data.frame(
     "Exact asymptotic weighting rule and finite-n log-neutral policy derived and verified",
     "Exact neutral alignment and radius derived; package verification added",
     "IID almost-sure drift theorem derived; convexity corollary and simulations added",
-    "Stationary-ergodic first-order result derived; Markov dependence simulation added"
+    "Stationary-ergodic first-order result derived; Markov dependence simulation added",
+    "Neutral-boundary Markov convergence and exact finite-horizon log-variance formula derived and numerically verified"
   ),
   stringsAsFactors = FALSE
 )
@@ -3923,6 +3939,317 @@ This separates two stochastic questions:
 
 **Status:** H11 establishes the stationary-ergodic first-order exponent and introduces dependence through a controlled two-state Markov comparison. The next stochastic step, if needed, would be to characterize the variance/random-limit behavior under explicit short-range-dependence assumptions rather than adding more arbitrary simulation.
 
+
+# H12. Neutral Markov Dependence Changes the Limiting Scale Distribution, Not Neutrality
+
+H11 shows that the first-order polynomial exponent is determined by the stationary marginal value
+
+\[
+E[h(C)].
+\]
+
+The manuscript-critical boundary case is
+
+\[
+E[h(C)]=0.
+\]
+
+Consider two available alignments
+
+\[
+c_-<0<c_+
+\]
+
+with stationary positive-state probability
+
+\[
+p^*
+=
+\frac{
+-h(c_-)
+}{
+h(c_+)-h(c_-)
+}.
+\]
+
+By construction,
+
+\[
+(1-p^*)h(c_-)+p^*h(c_+)=0.
+\]
+
+Now let \(C_n\) follow a stationary irreducible two-state Markov chain with this neutral marginal distribution.
+
+## Persistence parameterization
+
+Write \(I_n=1\) when \(C_n=c_+\) and \(I_n=0\) when \(C_n=c_-\). Parameterize the chain by its nontrivial eigenvalue \(\rho\):
+
+\[
+P(I_{n+1}=1\mid I_n=1)
+=
+p^*+\rho(1-p^*)
+\]
+
+and
+
+\[
+P(I_{n+1}=1\mid I_n=0)
+=
+p^*(1-\rho).
+\]
+
+The chain is initialized in its stationary distribution.
+
+Then
+
+\[
+E[I_n]=p^*
+\]
+
+and
+
+\[
+\operatorname{Cov}(I_n,I_{n+k})
+=
+p^*(1-p^*)\rho^k.
+\]
+
+Positive \(\rho\) produces persistence, \(\rho=0\) gives IID sampling, and admissible negative \(\rho\) produces alternation.
+
+## Exact decomposition of log geometry
+
+For each group size \(n\), define the exact log multipliers
+
+\[
+\ell_n^-
+=
+\log m_n(c_-)
+\]
+
+and
+
+\[
+\ell_n^+
+=
+\log m_n(c_+).
+\]
+
+Let
+
+\[
+\delta_n
+=
+\ell_n^+
+-
+\ell_n^-.
+\]
+
+Then
+
+\[
+\log\left(
+\frac{A_N}{A_{n_0}}
+\right)
+=
+\sum_n
+\left[
+\ell_n^-
++
+\delta_n I_n
+\right].
+\]
+
+Equivalently,
+
+\[
+\log\left(
+\frac{A_N}{A_{n_0}}
+\right)
+=
+M_N
++
+\sum_n
+\delta_n(I_n-p^*),
+\]
+
+where
+
+\[
+M_N
+=
+\sum_n
+\left[
+(1-p^*)\ell_n^-
++
+p^*\ell_n^+
+\right].
+\]
+
+Because the stationary marginal is asymptotically Gotham-neutral,
+
+\[
+M_N
+\]
+
+converges to a finite constant: its first-order \(1/n\) term cancels and the remaining expected increments are \(O(n^{-2})\).
+
+Also,
+
+\[
+\delta_n
+=
+\frac{
+h(c_+)-h(c_-)
+}{
+n
+}
++
+O(n^{-2}),
+\]
+
+so
+
+\[
+\sum_n \delta_n^2 < \infty.
+\]
+
+## Neutral-boundary convergence
+
+For an irreducible aperiodic finite-state Markov chain, the centered state process admits a bounded Poisson-equation / martingale decomposition. Combined with the square-summable weights \(\delta_n\), this implies
+
+\[
+\sum_n
+\delta_n(I_n-p^*)
+\]
+
+converges almost surely and in \(L^2\).
+
+Therefore
+
+\[
+\boxed{
+\log A_N
+\longrightarrow
+L_\rho
+\quad
+\text{almost surely and in }L^2
+}
+\]
+
+for a finite random variable \(L_\rho\), and hence
+
+\[
+\boxed{
+A_N
+\longrightarrow
+K_\rho
+=
+e^{L_\rho}
+\in(0,\infty)
+\quad\text{almost surely}.
+}
+\]
+
+Thus short-range Markov dependence does not destroy stochastic neutrality. It changes the **random limiting scale**.
+
+## Exact finite-horizon mean and variance
+
+Because the stationary marginal is the same for every \(\rho\),
+
+\[
+\boxed{
+E\left[
+\log\left(
+\frac{A_N}{A_{n_0}}
+\right)
+\right]
+=
+M_N
+}
+\]
+
+does not depend on persistence.
+
+The exact variance is
+
+\[
+\boxed{
+\operatorname{Var}\left[
+\log\left(
+\frac{A_N}{A_{n_0}}
+\right)
+\right]
+=
+p^*(1-p^*)
+\left[
+\sum_n \delta_n^2
++
+2
+\sum_{i<j}
+\delta_i\delta_j
+\rho^{j-i}
+\right].
+}
+\]
+
+For \(\rho\ge0\), the \(\delta_n\) are positive in the present two-direction setup, so stronger positive persistence increases the variance term by term.
+
+As \(N\rightarrow\infty\), the variance converges because \(\delta_n=O(1/n)\) and \(|\rho|<1\).
+
+This gives a direct interpretation of dependence at the neutral boundary:
+
+- the stationary marginal determines neutrality;
+- persistence does not change the mean first-order drift;
+- persistence changes uncertainty in the limiting structural scale.
+
+## Numerical verification
+
+For the canonical \(G=3,\tau=0.80\) example, use the symmetric support
+
+\[
+\{-0.5,+0.5\}
+\]
+
+with the H8/H10 neutral stationary weight \(p^*\). The exact recurrence was propagated for 5,000 steps with 800 realizations at each persistence value.
+
+```{r h12-neutral-markov-table}
+knitr::kable(
+  h12_neutral_markov_review,
+  digits = 6,
+  row.names = FALSE
+)
+```
+
+The theoretical mean log ratio is identical across persistence values because the stationary marginal is fixed. The theoretical and empirical standard deviations agree closely across the four persistence settings. The largest absolute discrepancy is approximately \(0.0368\), or about \(4.6\%\) of the corresponding theoretical standard deviation. The empirical mean log ratios also remain compatible with the common theoretical mean given Monte Carlo variability.
+
+The dependence effect is substantial. As persistence increases, the theoretical standard deviation of the final log-\(A\) ratio rises from approximately \(0.196\) at \(\rho=-0.5\) to approximately \(0.804\) at \(\rho=0.8\). The simulated 95% range of the final \(A\) ratio correspondingly widens from roughly \(0.72\)–\(1.43\) to \(0.28\)–\(5.57\).
+
+These results verify the exact finite-horizon moment calculation and the substantive H12 claim: fixing the neutral marginal drift does not fix the distribution of long-run structural scale.
+
+## Manuscript interpretation
+
+H12 provides a natural endpoint for the stochastic theory in the first ICC manuscript.
+
+The central stochastic message is now:
+
+\[
+\text{marginal nonlinear drift}
+\quad\Longrightarrow\quad
+\text{long-run regime},
+\]
+
+whereas
+
+\[
+\text{dependence}
+\quad\Longrightarrow\quad
+\text{uncertainty in the limiting scale}.
+\]
+
+At the neutral boundary, two processes can have the same ICC threshold, the same alignment support, the same stationary alignment distribution, and the same zero Gotham drift, yet produce very different distributions of long-run group geometry solely because of temporal dependence.
+
+**Status:** H12 is derived and numerically verified for stationary irreducible two-state Markov alignment under the current centered balanced ICC formulation. The exact finite-horizon mean and variance formulas agree with the recurrence simulations. This completes the planned theory expansion for Manuscript 1; no additional stochastic process should be added unless manuscript drafting exposes a specific logical gap.
+
 # Additional Plot Features Worth Following
 
 The current plots suggest several secondary questions:
@@ -3943,8 +4270,9 @@ These are observations from the current canonical example, not general results.
 5. **H8 complete:** retain the asymmetric neutral-weighting rule, finite-\(n\) log-neutral mixture, and deterministic mixed controller.
 6. **H9 complete:** retain the exact per-step structurally neutral alignment and its direct package verification at numerical tolerance.
 7. **H4/H5 reconciled:** distinguish one-step, finite-horizon, and asymptotic neutrality; retain the radius/structure distinction only as a finite-horizon phenomenon.
-8. **H10 added:** derive and test IID stochastic alignment; classify long-run behavior by \(E[h(C)]\), not \(E[C]\).
-9. **H11 added:** introduce stationary dependence and isolate its effect on first-order drift versus finite-sample fluctuations.
-10. After verifying H10/H11 numerically, decide whether to deepen the stochastic theory at the neutral boundary or broaden the structural criterion beyond ICC.
+8. **H10 complete:** IID stochastic alignment is classified by \(E[h(C)]\), not \(E[C]\).
+9. **H11 complete:** stationary dependence preserves the first-order exponent while changing finite-sample fluctuations.
+10. **H12 complete:** neutral two-state Markov convergence and the exact persistence-dependent variance formula are derived and numerically verified.
+11. **Theory freeze for Manuscript 1:** consolidate H1-H12 into a small theorem/lemma hierarchy, build the five planned figures/tables, review the relevant literature, and begin manuscript drafting. Add no new theory unless a specific gap emerges during writing.
 
 The deterministic centered threshold-hugging model is now largely reducible to exact low-dimensional recurrences and control rules. Future simulation should target questions not already settled analytically.

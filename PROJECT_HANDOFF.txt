@@ -1,8 +1,8 @@
 gothamloops.stats PROJECT HANDOFF
 ================================
-Updated: 2026-10-05
-Handoff version: v4
-Purpose: checkpoint after extending the Gotham threshold-hugging framework through H11, including the H4/H5 reframing, IID stochastic alignment theory, strict-convexity results, and stationary-dependent alignment processes.
+Updated: 2026-10-09
+Handoff version: v5
+Purpose: manuscript-theory-freeze checkpoint after completing and numerically verifying H12. Manuscript 1 is now scoped to the balanced centered ICC frontier/dynamics story, with no additional theory to be added unless drafting exposes a specific logical gap.
 
 PROJECT
 -------
@@ -183,15 +183,21 @@ RESEARCH SUPPORT FILES
 Current reproducible analysis layer:
 
   data-raw/sequence_grid_exploration.R
+  data-raw/stochastic_alignment_exploration.R
 
-This script supports longer fixed-alignment sequence diagnostics and plotting.
+These scripts support fixed-alignment diagnostics plus IID / Markov stochastic-alignment analysis.
 
 Current research notebook:
 
   report/gotham_sequence_hypotheses.Rmd
   report/gotham_sequence_hypotheses.docx
 
-The report is intentionally exploratory rather than package-facing. It records hypotheses, derivations, numerical verification, and plots.
+Manuscript-scoping files:
+
+  report/manuscript_1_scope.md
+  report/manuscript_1_theorem_map.md
+
+The hypothesis report remains an exploratory derivation notebook. The scope and theorem-map files now control Manuscript 1 and should be treated as the anti-scope-creep guardrails.
 
 
 VALIDATION STATUS
@@ -215,7 +221,7 @@ Contexts at the original package checkpoint:
 
 The test suite includes independent checks of analytic updates against raw-data recomputation.
 
-Latest user-reported R CMD check on 2026-10-02:
+Latest user-reported devtools::check() on 2026-10-09:
 
   0 errors
   0 warnings
@@ -223,9 +229,15 @@ Latest user-reported R CMD check on 2026-10-02:
 
 Duration reported:
 
-  52.1s
+  50.9s
 
-Report-only work after that check did not alter package R/ code.
+The package R/ code was unchanged by the H10-H12 / manuscript-scope work.
+
+During the check, RStudio emitted a Quarto version-probe message:
+
+  ERROR: Unknown command "TMPDIR=C:/Users/Mackson"
+
+followed by a system2("quarto", ...) warning. This did NOT register as an R CMD check error, warning, or note; the final package result remained 0/0/0. Treat this as an environment/tooling message unless it later affects an actual Quarto workflow.
 
 A recurring RStudio warning after some restarts is:
 
@@ -307,7 +319,7 @@ This numerical work motivated H1-H6 but is no longer the main source of evidence
 
 HYPOTHESIS / RESULT REGISTRY
 ----------------------------
-The research notebook now contains H1-H11.
+The research notebook now contains H1-H12.
 
 H1. ZERO-RADIUS HEADROOM IS PATH-INVARIANT
 ------------------------------------------
@@ -837,24 +849,97 @@ Current stochastic takeaway:
   - the mu_h = 0 dependent case is the natural next stochastic-theory target if this branch is continued.
 
 
+H12. NEUTRAL MARKOV DEPENDENCE CHANGES LIMITING VARIABILITY, NOT NEUTRALITY
+---------------------------------------------------------------------------
+Status:
+  derived and numerically verified; final planned theorem for Manuscript 1
+
+For a stationary irreducible two-state Markov alignment process with support:
+
+  c_- < 0 < c_+
+
+choose the stationary positive-state probability p* so that:
+
+  (1-p*) h(c_-) + p* h(c_+) = 0
+
+where:
+
+  h(c) = 2 c z_infinity(c)
+
+This fixes the stationary marginal at the Gotham-neutral boundary.
+
+Parameterize dependence by the second eigenvalue / persistence parameter rho. With exact log multipliers:
+
+  ell_n^- = log m_n(c_-)
+  ell_n^+ = log m_n(c_+)
+  delta_n = ell_n^+ - ell_n^-
+
+the finite-horizon log geometry decomposes into a deterministic mean component plus a centered Markov weighted sum.
+
+Because:
+
+  delta_n = O(1/n)
+
+the weights are square-summable. For the finite-state short-range Markov process considered here, the centered weighted sum converges almost surely and in L2.
+
+Therefore:
+
+  log A_N -> L_rho
+
+and:
+
+  A_N -> K_rho in (0, infinity)
+
+almost surely.
+
+The exact finite-horizon mean of log(A_N/A_start) depends only on the stationary marginal and is independent of rho.
+
+The exact finite-horizon variance is:
+
+  p*(1-p*) [
+    sum delta_n^2
+    + 2 sum_{i<j} delta_i delta_j rho^(j-i)
+  ]
+
+Thus persistence changes the variability of the limiting structural scale without changing the neutral regime.
+
+Canonical verification:
+  support = {-0.5, +0.5}
+  neutral positive share = 0.353615
+  5000 steps
+  800 realizations per persistence condition
+
+Theoretical SD of final log A ratio:
+  rho = -0.5 -> approximately 0.1959
+  rho =  0.0 -> approximately 0.3149
+  rho =  0.5 -> approximately 0.5114
+  rho =  0.8 -> approximately 0.8042
+
+Empirical SDs closely matched the theoretical values. The spread of final A widened sharply as persistence increased.
+
+H12 is the theory endpoint for Manuscript 1.
+
+
 CURRENT SCIENTIFIC TAKEAWAY
 ---------------------------
-The original empirical finding was that the same ICC threshold permits radically different observation-space heterogeneity depending on alignment.
+The first manuscript now has one coherent ICC-based story:
 
-The stronger result now is that the deterministic centered threshold-hugging model has an unexpectedly clean analytic structure:
+  1. a fixed ICC threshold defines an anisotropic frontier in observation space;
+  2. admissible novelty depends on alignment with existing group structure;
+  3. threshold-hugging dynamics collapse to an exact scale-free recurrence;
+  4. neutrality is nonlinear and directionally asymmetric;
+  5. IID stochastic growth is governed by E[h(C)], not E[C];
+  6. at the stochastic neutral boundary, short-range Markov dependence preserves finite positive limiting structure but changes its variability.
 
-  1. zero-radius headroom is path-invariant conditional on n and current ICC;
-  2. the threshold regime has exactly one positive centered frontier crossing under a simple persistent condition;
-  3. threshold-state dynamics collapse to a scale-free normalized recurrence;
-  4. fixed alignment yields explicit contraction / finite-limit / expansion regimes;
-  5. mean-zero directional balance is not structural balance;
-  6. neutral mixed policies require asymmetric directional weighting;
-  7. exact finite-n single-step neutrality is available in closed form and is slightly opposing;
-  8. IID stochastic growth is classified by E[h(C)], not E[C];
-  9. strict convexity implies every non-degenerate mean-zero IID alignment distribution is expansive;
-  10. stationary dependence preserves the first-order exponent but changes finite-sample fluctuation behavior.
+Manuscript 1 theory is now FROZEN through H12.
 
-The centered ICC version is therefore now an analytically tractable constrained dynamical/control system with a natural stochastic extension, rather than a brute-force simulation exercise.
+Do not add new structural criteria, stochastic processes, unbalanced-group theory, non-centered proposals, spatial/Fourier branches, KPZ/interface-growth theory, or downstream inference simulations to Manuscript 1 unless manuscript drafting reveals a specific logical gap.
+
+The central manuscript framing is:
+
+  SAME ICC, DIFFERENT GEOMETRY.
+
+The paper is about how a scalar ICC constraint can conceal strongly direction-dependent admissible heterogeneity and nontrivial sequential dynamics.
 
 
 IMPORTANT TERMINOLOGY / INTERPRETATION CAUTIONS
@@ -884,42 +969,37 @@ IMPORTANT TERMINOLOGY / INTERPRETATION CAUTIONS
 12. H11's stationary-ergodic result identifies the first-order exponent. At E[h(C)] = 0, stronger dependence assumptions are needed before claiming convergence to a finite positive random limit.
 
 
-NEXT SCIENTIFIC DECISION
-------------------------
-Do NOT add more arbitrary fixed-alignment or IID simulations merely for their own sake. The deterministic structure through H9 and the first stochastic layer through H11 are now analytically characterized.
+NEXT MANUSCRIPT PHASE
+---------------------
+Theory discovery for Manuscript 1 is complete through H12.
 
-At the next session, choose one of two scientifically meaningful directions:
+The next work should be manuscript construction, not further theory expansion.
 
-A. DEEPEN THE STOCHASTIC BRANCH AT THE NEUTRAL BOUNDARY
+Order of work:
 
-Focus on:
+  1. consolidate H1-H12 into the theorem / lemma hierarchy in:
+       report/manuscript_1_theorem_map.md
 
-  E[h(C)] = 0
+  2. build the five planned manuscript figures/tables:
+       - static ICC frontier / representative profiles
+       - fixed-alignment sequential contraction / neutral / expansion
+       - nonlinear drift h(c) and structural neutrality
+       - same-E[C], different-E[h(C)] stochastic regimes
+       - neutral Markov persistence versus limiting variability
 
-under dependent alignment processes.
+  3. conduct a focused literature review for positioning and terminology
 
-Questions:
-  - Under what explicit mixing / short-range-dependence conditions does the centered harmonic series converge?
-  - What is the variance of the random limiting multiplicative factor?
-  - Can a martingale approximation or CLT characterize finite-sample fluctuations?
-  - How does persistence change the distribution of the limiting or near-neutral geometry?
-  - Which stochastic-neutral policies remain robust under dependence misspecification?
+  4. draft the Introduction around:
+       "Same ICC, Different Geometry"
 
-This is the closest continuation of H10-H11.
+  5. draft Methods / Results around the five-result theorem hierarchy
 
-B. BROADER STRUCTURAL CRITERIA
+  6. move supporting algebra and reproducibility checks to appendix / supplement as needed
 
-Ask whether the Gotham geometry survives when ICC is replaced or supplemented by another grouping/structure criterion.
+Default stopping rule:
+  NO H13.
 
-Possible later candidates:
-  - alternative reliability / variance-component measures
-  - cluster separation summaries
-  - multilevel-model criteria
-  - multiple structural constraints
-
-Do not broaden until the desired scientific question is explicit.
-
-The H4/H5 wording cleanup is complete.
+Only reopen theory if drafting identifies a specific missing result needed for the manuscript argument.
 
 
 LATER SIMULATION PROGRAM
@@ -961,17 +1041,27 @@ Do not divert into these spatial branches until the statistical framework's next
 
 GIT / CHECKPOINT STATUS
 -----------------------
-Last confirmed pushed checkpoint before the H4/H5 + stochastic-alignment work:
+Last pushed commit explicitly confirmed in the handoff history:
 
   8e1eb7b  Develop sequential Gotham geometry and neutral control rules
 
-At that checkpoint:
+Later H4/H5, H10-H12, and manuscript-scope work may already have been committed in the local repository; do NOT infer that from this file.
 
-  HEAD -> main
-  origin/main -> main
-  working tree clean
+Before the current checkpoint commit, use:
 
-The H4/H5 reframing changes the research notebook and handoff only. After applying the patch, render report/gotham_sequence_hypotheses.Rmd so the generated DOCX matches the source before the next commit.
+  git status --short
+  git log -3 --oneline --decorate
+
+as authoritative.
+
+Files expected to be part of the current manuscript-theory-freeze checkpoint include:
+
+  PROJECT_HANDOFF.txt
+  data-raw/stochastic_alignment_exploration.R
+  report/gotham_sequence_hypotheses.Rmd
+  report/gotham_sequence_hypotheses.docx
+  report/manuscript_1_scope.md
+  report/manuscript_1_theorem_map.md
 
 Actual git status is authoritative.
 
@@ -995,17 +1085,20 @@ Expected package baseline:
 
   285 tests passing
 
-Latest user-reported R CMD check baseline:
+Latest user-reported devtools::check() baseline (2026-10-09):
 
   0 errors | 0 warnings | 0 notes
+  duration 50.9s
 
 Then read:
 
   PROJECT_HANDOFF.txt
   report/gotham_sequence_hypotheses.Rmd
   data-raw/stochastic_alignment_exploration.R
+  report/manuscript_1_scope.md
+  report/manuscript_1_theorem_map.md
 
-before changing the model.
+before changing the model or manuscript story.
 
 
 DO NOT LOSE THESE DESIGN PRINCIPLES
@@ -1022,19 +1115,23 @@ DO NOT LOSE THESE DESIGN PRINCIPLES
 - In stochastic work, distinguish marginal first-order drift from dependence-driven fluctuations.
 - Prefer bounded, decision-oriented development steps.
 - Keep the package useful as a scientific research object, not merely a game implementation.
+- Manuscript 1 is theory-frozen through H12: prioritize story, figures, literature positioning, and writing over discovering additional phenomena.
 
 
 END OF HANDOFF
 --------------
 Current milestone:
-  centered threshold-hugging Gotham geometry characterized through H11, including deterministic control laws, H4/H5 reconciliation, IID stochastic drift theory, and stationary-dependent first-order asymptotics
+  Manuscript 1 theory freeze reached through H12.
 
 Automated package baseline:
   285 tests passing
-  R CMD check: 0 errors | 0 warnings | 0 notes
+  devtools::check() on 2026-10-09:
+    0 errors | 0 warnings | 0 notes
+    duration 50.9s
 
-Strongest current result:
-  the threshold-hugging process reduces to exact normalized recurrences; deterministic neutrality admits explicit control laws, while stochastic first-order growth is governed by the nonlinear marginal drift E[h(C)] rather than ordinary mean alignment.
+Strongest manuscript result:
+  a fixed ICC does not imply a unique observation-space geometry or dynamic regime. Directional alignment generates an anisotropic frontier; the normalized recurrence makes neutrality nonlinear; stochastic first-order behavior is governed by E[h(C)]; and at neutral marginal drift, temporal dependence changes limiting-scale variability without changing neutrality.
 
 Immediate next task:
-  choose whether to deepen the stochastic neutral-boundary theory under dependence or broaden the structural criterion beyond ICC.
+  build the five planned manuscript figures/tables, consolidate theorem/lemma presentation, review the positioning literature, and begin writing. Do not add H13 by default.
+
